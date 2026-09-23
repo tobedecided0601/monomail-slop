@@ -54,7 +54,7 @@ class FcmMessagingService : FirebaseMessagingService() {
 
         WorkManager.getInstance(applicationContext).enqueueUniqueWork(
             "push_sync_$accountId",
-            ExistingWorkPolicy.REPLACE,
+            ExistingWorkPolicy.APPEND_OR_REPLACE,
             workRequest
         )
     }

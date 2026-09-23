@@ -30,6 +30,7 @@ class EmailSyncWorker @AssistedInject constructor(
 ) : CoroutineWorker(appContext, workerParams) {
     companion object {
         const val KEY_ACCOUNT_ID = "account_id"
+        const val KEY_CONTINUE_ADAPTIVE_SYNC = "continue_adaptive_sync"
         private const val TAG = "EmailSyncWorker"
         private const val ADAPTIVE_INTERVAL_MINUTES = 2L
         private const val ADAPTIVE_ACTIVITY_WINDOW_MINUTES = 5L
@@ -55,7 +56,9 @@ class EmailSyncWorker @AssistedInject constructor(
                 async(Dispatchers.IO) { syncAccount(account) }
             }.awaitAll()
         }
-        scheduleNextAdaptiveSync(applicationContext, accountManager)
+        if (inputData.getBoolean(KEY_CONTINUE_ADAPTIVE_SYNC, false)) {
+            scheduleNextAdaptiveSync(applicationContext, accountManager)
+        }
         val overallHasFailure = results.any { it.first }
         val overallHasAuthFailure = results.any { it.second }
         return if (overallHasFailure && !overallHasAuthFailure) Result.retry() else Result.success()
@@ -63,8 +66,7 @@ class EmailSyncWorker @AssistedInject constructor(
 
     private suspend fun syncAccount(account: com.shrivatsav.monomail.core.data.auth.UserProfile): Pair<Boolean, Boolean> {
         val accountId = account.id
-        val lastKnownTimestamp = accountManager.getLastKnownEmailId(accountId)
-        Log.i("EmailSyncWorker", "Starting sync for account $accountId (lastKnownTimestamp: $lastKnownTimestamp)")
+        Log.i("EmailSyncWorker", "Starting sync for account $accountId")
         // Deliver queued sends first: a send stuck in pending_sends (undo-send
         // countdown expired without the app being opened) must not wait for
         // the user to reopen the inbox. Failures keep the row for the next run.
@@ -95,11 +97,13 @@ class EmailSyncWorker @AssistedInject constructor(
         val isLatestDraft = latestEmail?.inDrafts == true
         val isSelfSent = latestEmail?.fromEmail?.equals(account.email, ignoreCase = true) == true
 
-        val lastKnownLong = lastKnownTimestamp?.toLongOrNull() ?: 0L
-        val isTrulyNew = newTimestamp > lastKnownLong
+        // Claim before posting so overlapping push, periodic, and adaptive
+        // workers cannot all notify for the same message.
+        val timestampAdvance = accountManager.advanceLastKnownEmailTimestamp(accountId, newTimestamp)
+        val isTrulyNew = timestampAdvance.advanced && timestampAdvance.previousTimestamp != null
         val isUnread = !newestThread.isRead
 
-        if (lastKnownTimestamp != null && isTrulyNew && !isLatestDraft && !isSelfSent && isUnread) {
+        if (isTrulyNew && !isLatestDraft && !isSelfSent && isUnread) {
             val disabledAccounts = settingsDataStore.settingsFlow.value.disabledNotificationAccounts
             if (disabledAccounts.contains(accountId)) {
                 Log.i("EmailSyncWorker", "New email detected for $accountId, but notifications are disabled for this account. Skipping notification banner.")
@@ -111,12 +115,11 @@ class EmailSyncWorker @AssistedInject constructor(
             Log.i("EmailSyncWorker", "Newest message is a draft. Skipping notification banner.")
         } else if (isSelfSent) {
             Log.i("EmailSyncWorker", "Newest message was sent by this account. Skipping notification banner.")
-        } else if (lastKnownTimestamp == null) {
+        } else if (timestampAdvance.previousTimestamp == null) {
             Log.i("EmailSyncWorker", "lastKnownTimestamp was null (first sync baseline). Skipping notification banner.")
         } else {
             Log.i("EmailSyncWorker", "No new emails detected (timestamp matched lastKnownTimestamp).")
         }
-        accountManager.setLastKnownEmailId(accountId, newTimestamp.toString())
         return Pair(false, false)
     }
 
@@ -139,6 +142,9 @@ class EmailSyncWorker @AssistedInject constructor(
         val delayMinutes = if (isRecentlyActive) ADAPTIVE_INTERVAL_MINUTES else FALLBACK_INTERVAL_MINUTES
         val workRequest = OneTimeWorkRequestBuilder<EmailSyncWorker>()
             .setInitialDelay(delayMinutes, TimeUnit.MINUTES)
+            .setInputData(
+                androidx.work.workDataOf(KEY_CONTINUE_ADAPTIVE_SYNC to true)
+            )
             .build()
         WorkManager.getInstance(context).enqueueUniqueWork(
             ADAPTIVE_SYNC_WORK_NAME, ExistingWorkPolicy.REPLACE, workRequest

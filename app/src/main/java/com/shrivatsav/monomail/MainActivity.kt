@@ -135,6 +135,9 @@ class MainActivity : ComponentActivity() {
     private fun scheduleAdaptiveSync() {
         val workRequest = OneTimeWorkRequestBuilder<EmailSyncWorker>()
             .setInitialDelay(1, TimeUnit.MINUTES)
+            .setInputData(
+                androidx.work.workDataOf(EmailSyncWorker.KEY_CONTINUE_ADAPTIVE_SYNC to true)
+            )
             .setConstraints(
                 Constraints.Builder()
                     .setRequiredNetworkType(NetworkType.CONNECTED)

@@ -18,6 +18,11 @@ import com.shrivatsav.monomail.security.SecurityUtil
 import com.shrivatsav.monomail.core.network.provider.ProviderCache
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "auth_prefs")
 class AccountManager(private val context: Context) {
+    data class TimestampAdvance(
+        val previousTimestamp: Long?,
+        val advanced: Boolean
+    )
+
     companion object {
         private const val TAG = "AccountManager"
         private val KEY_ACCOUNTS_JSON = stringPreferencesKey("accounts_json")
@@ -198,14 +203,22 @@ class AccountManager(private val context: Context) {
     suspend fun clearAll() {
         context.dataStore.edit { it.clear() }
     }
-    suspend fun getLastKnownEmailId(accountId: String): String? {
-        val prefs = context.dataStore.data.first()
-        return prefs[stringPreferencesKey("last_timestamp_$accountId")]
-    }
-    suspend fun setLastKnownEmailId(accountId: String, emailId: String) {
+    /**
+     * Atomically advances the notification watermark for an account.
+     *
+     * Push, periodic, and adaptive sync can overlap. DataStore serializes
+     * [edit] calls, ensuring that only one worker claims a newer timestamp.
+     */
+    suspend fun advanceLastKnownEmailTimestamp(accountId: String, timestamp: Long): TimestampAdvance {
+        var result = TimestampAdvance(previousTimestamp = null, advanced = false)
         context.dataStore.edit { prefs ->
-            prefs[stringPreferencesKey("last_timestamp_$accountId")] = emailId
+            val key = stringPreferencesKey("last_timestamp_$accountId")
+            val previous = prefs[key]?.toLongOrNull()
+            val advanced = previous == null || timestamp > previous
+            if (advanced) prefs[key] = timestamp.toString()
+            result = TimestampAdvance(previousTimestamp = previous, advanced = advanced)
         }
+        return result
     }
     suspend fun getLastActiveTime(): Long {
         val prefs = context.dataStore.data.first()

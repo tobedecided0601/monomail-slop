@@ -9,6 +9,7 @@ import android.net.Uri
 import android.text.TextUtils
 import android.webkit.WebSettings
 import android.webkit.WebView
+import android.widget.Toast
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
@@ -46,6 +47,7 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.foundation.layout.width
@@ -71,6 +73,7 @@ import androidx.compose.material.icons.rounded.Warning
 import androidx.compose.material.icons.rounded.Archive
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material3.Surface
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -1190,6 +1193,8 @@ private fun EmailWebViewCard(
     useOverviewScaling: Boolean,
     allowRemoteImages: Boolean
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var pendingLink by remember(emailId) { mutableStateOf<Uri?>(null) }
     var renderGeneration by remember(emailId, htmlContent, allowRemoteImages) { mutableStateOf(0) }
     var rendererRetryCount by remember(emailId, htmlContent, allowRemoteImages) { mutableStateOf(0) }
     var isLoaded by remember(emailId, htmlContent, allowRemoteImages, renderGeneration) { mutableStateOf(false) }
@@ -1229,8 +1234,8 @@ private fun EmailWebViewCard(
                             configureWebView(this, allowRemoteImages)
                             setOnTouchListener(createTouchHandler())
                             webViewClient = createWebViewClient(
-                                context = context,
                                 allowRemoteImages = allowRemoteImages,
+                                onLinkClick = { pendingLink = it },
                                 onPageFinished = {
                                     if (callbackGeneration == renderGeneration) {
                                         loadError = null
@@ -1301,6 +1306,91 @@ private fun EmailWebViewCard(
             }
         }
     }
+
+    pendingLink?.let { uri ->
+        LinkPreviewDialog(
+            uri = uri,
+            onDismiss = { pendingLink = null },
+            onOpen = {
+                pendingLink = null
+                openExternalLink(context, uri)
+            }
+        )
+    }
+}
+
+@Composable
+private fun LinkPreviewDialog(
+    uri: Uri,
+    onDismiss: () -> Unit,
+    onOpen: () -> Unit
+) {
+    val supported = isSupportedExternalLink(uri)
+    val context = androidx.compose.ui.platform.LocalContext.current
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Open external link?") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    linkDestinationLabel(uri),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+                SelectionContainer {
+                    Text(
+                        uri.toString(),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                if (!supported) {
+                    Text(
+                        "This link type isn't supported for safety.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        confirmButton = {
+            Row {
+                TextButton(onClick = {
+                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    clipboard.setPrimaryClip(ClipData.newPlainText("Link", uri.toString()))
+                    Toast.makeText(context, "Link copied", Toast.LENGTH_SHORT).show()
+                }) { Text("Copy") }
+                TextButton(onClick = onOpen, enabled = supported) { Text("Open") }
+            }
+        }
+    )
+}
+
+internal fun isSupportedExternalLink(uri: Uri): Boolean = when (uri.scheme?.lowercase(Locale.ROOT)) {
+    "http", "https" -> !uri.host.isNullOrBlank()
+    "mailto", "tel" -> uri.schemeSpecificPart.isNotBlank()
+    else -> false
+}
+
+internal fun linkDestinationLabel(uri: Uri): String = when (uri.scheme?.lowercase(Locale.ROOT)) {
+    "http", "https" -> uri.host?.takeIf { it.isNotBlank() } ?: "Web link"
+    "mailto" -> uri.schemeSpecificPart.substringBefore('?').ifBlank { "Email address" }
+    "tel" -> uri.schemeSpecificPart.ifBlank { "Phone number" }
+    else -> "Unknown destination"
+}
+
+private fun openExternalLink(context: Context, uri: Uri) {
+    if (!isSupportedExternalLink(uri)) return
+    try {
+        context.startActivity(
+            android.content.Intent(android.content.Intent.ACTION_VIEW, uri)
+                .apply { addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK) }
+        )
+    } catch (e: Exception) {
+        android.util.Log.w("EmailDetail", "No app could open external link", e)
+        Toast.makeText(context, "No app can open this link", Toast.LENGTH_SHORT).show()
+    }
 }
 
 private fun patchEmailHtml(htmlContent: String): String {
@@ -1356,8 +1446,8 @@ private fun createTouchHandler(): android.view.View.OnTouchListener {
 }
 
 private fun createWebViewClient(
-    context: android.content.Context,
     allowRemoteImages: Boolean,
+    onLinkClick: (Uri) -> Unit,
     onPageFinished: () -> Unit,
     onMainFrameError: (String) -> Unit,
     onRenderProcessGone: () -> Unit
@@ -1384,13 +1474,7 @@ private fun createWebViewClient(
         request: android.webkit.WebResourceRequest?
     ): Boolean {
         request?.url?.let { uri ->
-            try {
-                context.startActivity(
-                    android.content.Intent(android.content.Intent.ACTION_VIEW, uri)
-                        .apply { addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK) })
-            } catch (e: Exception) {
-                android.util.Log.e("EmailDetail", "Failed to open URL in browser", e)
-            }
+            onLinkClick(uri)
             return true
         }
         return super.shouldOverrideUrlLoading(view, request)
