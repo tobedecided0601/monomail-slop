@@ -83,7 +83,7 @@ internal fun AppearanceSettingsScreen(
             )
             CardDivider()
             SettingsToggleRow(
-                icon = Icons.Rounded.ShortText,
+                icon = Icons.AutoMirrored.Rounded.ShortText,
                 title = "Show Snippet",
                 subtitle = "Preview email body text in the list",
                 checked = settings.showSnippet,

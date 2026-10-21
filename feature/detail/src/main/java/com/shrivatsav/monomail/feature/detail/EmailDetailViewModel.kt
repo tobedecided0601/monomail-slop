@@ -35,6 +35,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 
 sealed interface ThreadListItem {
@@ -68,9 +69,11 @@ class EmailDetailViewModel @Inject constructor(
     private val focusedEmailId = savedStateHandle.get<String>("focusedId")
     private val _expandedEmailIds = MutableStateFlow<Set<String>>(emptySet())
     private val reloadRequests = MutableSharedFlow<Pair<String, String>>(extraBufferCapacity = 1)
+    private val expandedBodyJobs = ConcurrentHashMap<String, kotlinx.coroutines.Job>()
 
     fun expandEmails(ids: List<String>) {
         _expandedEmailIds.value = _expandedEmailIds.value + ids
+        ids.forEach { loadBodyIfNeeded(it) }
     }
     fun toggleEmailExpansion(id: String) {
         val current = _expandedEmailIds.value
@@ -78,6 +81,30 @@ class EmailDetailViewModel @Inject constructor(
             _expandedEmailIds.value = current - id
         } else {
             _expandedEmailIds.value = current + id
+            loadBodyIfNeeded(id)
+        }
+    }
+
+    private fun loadBodyIfNeeded(emailId: String) {
+        if (expandedBodyJobs.containsKey(emailId)) return
+        val threadId = _threadId.value
+        val accountId = _accountId.value
+        if (threadId.isBlank() || accountId.isBlank()) return
+        expandedBodyJobs[emailId] = viewModelScope.launch {
+            try {
+                val email = repository.getEmailById(emailId, accountId)
+                if (email?.body.isNullOrBlank()) {
+                    repository.withDetailRequest(accountId) {
+                        repository.refreshThread(threadId, accountId, emailId)
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w("EmailDetailVM", "Expanded message body refresh failed for $emailId", e)
+            } finally {
+                expandedBodyJobs.remove(emailId)
+            }
         }
     }
     
@@ -293,14 +320,16 @@ class EmailDetailViewModel @Inject constructor(
     private suspend fun loadThread(id: String, accountId: String) {
         _error.value = null
         _isLoading.value = true
-        try {
+        repository.withDetailRequest(accountId) {
+          try {
             repository.markThreadAsRead(id, accountId)
             var failure: Throwable? = null
             for (attempt in 0 until DETAIL_FETCH_ATTEMPTS) {
-                val result = repository.refreshThread(id, accountId)
+                val result = repository.refreshThread(id, accountId, focusedEmailId)
                 failure = result.exceptionOrNull()
                 if (failure == null) break
-                if (!failure.isTransientDetailFailure() || attempt == DETAIL_FETCH_ATTEMPTS - 1) {
+                if (!failure.isTransientDetailFailure() || failure is ProviderContentException ||
+                    attempt == DETAIL_FETCH_ATTEMPTS - 1) {
                     break
                 }
                 delay(DETAIL_RETRY_BASE_DELAY_MS * (1L shl attempt))
@@ -308,13 +337,14 @@ class EmailDetailViewModel @Inject constructor(
             if (failure != null) {
                 _error.value = failure?.message ?: "Failed to refresh thread"
             }
-        } catch (e: CancellationException) {
+          } catch (e: CancellationException) {
             throw e
-        } catch (e: Exception) {
+          } catch (e: Exception) {
             _error.value = e.message ?: "Failed to load email"
             Log.e("EmailDetailVM", "Unexpected error loading thread $id", e)
-        } finally {
+          } finally {
             _isLoading.value = false
+          }
         }
     }
 

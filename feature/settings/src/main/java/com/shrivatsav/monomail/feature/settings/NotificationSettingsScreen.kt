@@ -5,6 +5,8 @@ import android.os.Build
 import android.provider.Settings
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.Reply
+import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -77,7 +79,7 @@ internal fun NotificationSettingsScreen(
                         )
                         CardDivider()
                         BottomSheetPickerRow(
-                            icon = Icons.Rounded.VolumeUp,
+                            icon = Icons.AutoMirrored.Rounded.VolumeUp,
                             title = "Sound",
                             currentValue = profile.sound.displayName(),
                             options = NotificationSound.entries.map { it.displayName() },
@@ -149,7 +151,7 @@ internal fun NotificationSettingsScreen(
         SettingsCard {
             val quickActions = settings.notificationQuickActions
             val rows = listOf(
-                Triple(Icons.Rounded.Reply, "Reply", "reply"),
+                Triple(Icons.AutoMirrored.Rounded.Reply, "Reply", "reply"),
                 Triple(Icons.Rounded.Archive, "Archive", "archive"),
                 Triple(Icons.Rounded.Delete, "Trash", "delete"),
                 Triple(Icons.Rounded.Snooze, "Snooze", "snooze")

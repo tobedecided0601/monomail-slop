@@ -16,6 +16,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ForwardToInbox
+import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -64,7 +66,7 @@ internal fun AccountsSettingsScreen(
 
                     val providerIcon = when (account.provider.lowercase()) {
                         "gmail" -> Icons.Rounded.Email
-                        "outlook" -> Icons.Rounded.ForwardToInbox
+                        "outlook" -> Icons.AutoMirrored.Rounded.ForwardToInbox
                         "imap" -> Icons.Rounded.Storage
                         else -> Icons.Rounded.AccountCircle
                     }
@@ -231,11 +233,9 @@ private fun ImapAccountDetailDialog(
                         )
                         scope.launch {
                             val encrypted = SecurityUtil.encryptString(newConfig.toJson())
-                            if (encrypted != null) {
-                                authManager.updateAccount(account.copy(accessToken = encrypted, displayName = displayName.trim()))
-                                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                editing = false
-                            }
+                            authManager.updateAccount(account.copy(accessToken = encrypted, displayName = displayName.trim()))
+                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            editing = false
                         }
                     },
                     enabled = portsValid
@@ -347,7 +347,7 @@ private fun AccountDetailContent(
             }
         }
 
-        ConfigSectionCard(title = "SMTP", icon = Icons.Rounded.Send) {
+        ConfigSectionCard(title = "SMTP", icon = Icons.AutoMirrored.Rounded.Send) {
             ConfigRow("Host", config.smtpHost.ifBlank { "Uses IMAP host" }, mono = true)
             ConfigRow("Port", if (config.smtpPort > 0) config.smtpPort.toString() else "Auto", mono = true)
             ConfigRow("Security", smtpSecurityMode(config).label)
@@ -402,7 +402,7 @@ private fun AccountEditContent(
             SecurityModeChips(label = "Security", mode = imapMode, onSelect = onImapMode)
         }
 
-        ConfigSectionCard(title = "SMTP", icon = Icons.Rounded.Send) {
+        ConfigSectionCard(title = "SMTP", icon = Icons.AutoMirrored.Rounded.Send) {
             EditField(
                 value = smtpHost,
                 onValueChange = onSmtpHostChange,

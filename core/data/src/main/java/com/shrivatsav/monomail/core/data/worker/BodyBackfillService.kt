@@ -35,6 +35,7 @@ class BodyBackfillService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
+        val allowMetered = intent.getBooleanExtra("allowMetered", false)
 
         // Single-flight: a running sweep owns the notification; ignore repeat
         // triggers (deep-sync completion, worker sync, pull-to-refresh) instead of
@@ -49,7 +50,7 @@ class BodyBackfillService : Service() {
 
         backfillJob = scope.launch {
             try {
-                emailRepository.startBodyBackfill(accountId)
+                emailRepository.startBodyBackfill(accountId, allowMetered = allowMetered)
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -80,9 +81,10 @@ class BodyBackfillService : Service() {
 
 
     companion object {
-        fun start(context: Context, accountId: String) {
+        fun start(context: Context, accountId: String, allowMetered: Boolean = false) {
             val intent = Intent(context, BodyBackfillService::class.java).apply {
                 putExtra("accountId", accountId)
+                putExtra("allowMetered", allowMetered)
             }
             context.startForegroundService(intent)
         }

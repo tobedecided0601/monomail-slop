@@ -82,9 +82,12 @@ class ImapProvider(
      * a nested [ensureFoldersInitialized] inside [pool.withStore] would try to
      * re-acquire the same non-reentrant mutex and deadlock.
      */
-    private suspend fun <T> withStore(block: suspend (Store) -> T): T {
+    private suspend fun <T> withStore(
+        priority: Boolean = false,
+        block: suspend (Store) -> T
+    ): T {
         ensureFoldersInitialized()
-        return pool.withStore(block)
+        return pool.withStore(priority = priority, block = block)
     }
 
     private suspend fun getFolderName(folder: EmailFolder): String? {
@@ -306,15 +309,38 @@ class ImapProvider(
         return folderSet
     }
 
-    override suspend fun getThread(threadId: String, folderHints: List<String>): ProviderThread = withStore { store ->
+    override suspend fun getThread(
+        threadId: String,
+        folderHints: List<String>,
+        preferredMessageId: String?
+    ): ProviderThread = withStore(priority = true) { store ->
+        val startedAt = System.currentTimeMillis()
         val searchFolders = resolveSearchFolders(folderHints)
         val rawMessages = mutableListOf<ImapRawMessage>()
 
         for (folderName in searchFolders) {
-            collectMessagesFromFolder(store, folderName, threadId, rawMessages)
+            val folderStartedAt = System.currentTimeMillis()
+            val foundPreferred = collectMessagesFromFolder(
+                store = store,
+                folderName = folderName,
+                threadId = threadId,
+                preferredMessageId = preferredMessageId,
+                rawMessages = rawMessages
+            )
+            android.util.Log.d(
+                "ImapTiming",
+                "[ImapTiming] thread=$threadId stage=folder_search folder=$folderName elapsedMs=${System.currentTimeMillis() - folderStartedAt}"
+            )
+            // A detail request only needs the selected message immediately. The
+            // remaining conversation members are metadata-only and are loaded
+            // from the first folder that contains the target.
+            if (foundPreferred || (preferredMessageId == null && rawMessages.isNotEmpty())) break
         }
 
-        if (rawMessages.isEmpty()) return@withStore ProviderThread(threadId, emptyList(), isComplete = false)
+        if (rawMessages.isEmpty()) {
+            android.util.Log.d("ImapTiming", "[ImapTiming] thread=$threadId stage=total elapsedMs=${System.currentTimeMillis() - startedAt}")
+            return@withStore ProviderThread(threadId, emptyList(), isComplete = false)
+        }
 
         val threadsMap = ImapThreader.groupByReferences(rawMessages.distinctBy { it.messageId })
         val messages = threadsMap.values.firstOrNull { messages -> messages.any { it.id == threadId } }
@@ -323,6 +349,7 @@ class ImapProvider(
         // IMAP has no authoritative thread resource. Reference searches can
         // miss messages in custom folders, so this result must never drive
         // deletion of locally stored thread members.
+        android.util.Log.d("ImapTiming", "[ImapTiming] thread=$threadId stage=total elapsedMs=${System.currentTimeMillis() - startedAt}")
         ProviderThread(threadId, messages, isComplete = false)
     }
 
@@ -330,42 +357,66 @@ class ImapProvider(
         store: Store,
         folderName: String,
         threadId: String,
+        preferredMessageId: String?,
         rawMessages: MutableList<ImapRawMessage>
-    ) {
+    ): Boolean {
         val f = store.getFolder(folderName)
-        if (!f.exists()) return
+        if (!f.exists()) return false
 
         try {
+            val openStartedAt = System.currentTimeMillis()
             f.open(Folder.READ_ONLY)
-            val orTerm = jakarta.mail.search.OrTerm(
+            android.util.Log.d("ImapTiming", "[ImapTiming] thread=$threadId stage=folder_open folder=$folderName elapsedMs=${System.currentTimeMillis() - openStartedAt}")
+            val threadTerm = jakarta.mail.search.OrTerm(
                 jakarta.mail.search.HeaderTerm(HEADER_MESSAGE_ID, threadId),
                 jakarta.mail.search.OrTerm(
                     jakarta.mail.search.HeaderTerm(HEADER_REFERENCES, threadId),
                     jakarta.mail.search.HeaderTerm(HEADER_IN_REPLY_TO, threadId)
                 )
             )
-            val matchingMessages = f.search(orTerm)
-            if (matchingMessages.isEmpty()) return
+            val searchTerm = preferredMessageId?.let {
+                jakarta.mail.search.OrTerm(
+                    threadTerm,
+                    jakarta.mail.search.HeaderTerm(HEADER_MESSAGE_ID, it)
+                )
+            } ?: threadTerm
+            val matchingMessages = f.search(searchTerm)
+            if (matchingMessages.isEmpty()) return false
 
             val profile = jakarta.mail.FetchProfile().apply {
                 add(jakarta.mail.FetchProfile.Item.ENVELOPE)
                 add(jakarta.mail.FetchProfile.Item.FLAGS)
                 add(jakarta.mail.FetchProfile.Item.CONTENT_INFO)
             }
+            val metadataStartedAt = System.currentTimeMillis()
             f.fetch(matchingMessages, profile)
+            android.util.Log.d("ImapTiming", "[ImapTiming] thread=$threadId stage=metadata_fetch folder=$folderName elapsedMs=${System.currentTimeMillis() - metadataStartedAt}")
 
-            for (msg in matchingMessages) {
-                val raw = threadMessageToRaw(msg, threadId) ?: continue
+            var foundPreferred = false
+            val orderedMessages = matchingMessages.sortedWith(
+                compareBy { msg ->
+                    if (preferredMessageId != null &&
+                        msg.getHeader(HEADER_MESSAGE_ID)?.firstOrNull() == preferredMessageId
+                    ) 0 else 1
+                }
+            )
+            for (msg in orderedMessages) {
+                val messageId = msg.getHeader(HEADER_MESSAGE_ID)?.firstOrNull()
+                val isPreferred = preferredMessageId != null && messageId == preferredMessageId
+                if (isPreferred) foundPreferred = true
+                val raw = threadMessageToRaw(msg, threadId, fetchBody = isPreferred || preferredMessageId == null) ?: continue
                 rawMessages.add(raw)
             }
+            return foundPreferred || preferredMessageId == null
         } catch (e: Exception) {
             if (!e.isMissingFolderFailure()) throw e
+            return false
         } finally {
             if (f.isOpen) f.close(false)
         }
     }
 
-    private fun threadMessageToRaw(msg: jakarta.mail.Message, threadId: String): ImapRawMessage? {
+    private fun threadMessageToRaw(msg: jakarta.mail.Message, threadId: String, fetchBody: Boolean): ImapRawMessage? {
         val messageId = msg.getHeader(HEADER_MESSAGE_ID)?.firstOrNull() ?: return null
         val references = msg.getHeader(HEADER_REFERENCES)?.joinToString(" ") ?: ""
         val inReplyTo = msg.getHeader(HEADER_IN_REPLY_TO)?.firstOrNull() ?: ""
@@ -386,15 +437,18 @@ class ImapProvider(
         if (isDraft) folderSet.add(EmailFolder.DRAFT)
 
         val state = BodyParseState(messageId = messageId)
-        // Lazy part access: JavaMail fetches only the MIME parts we touch
-        // (text/plain, text/html) via individual IMAP FETCH commands — no need
-        // to download the entire raw message.  The old readBodyCapped approach
-        // truncated at 256 KB which cut through base64 attachments and broke
-        // HTML decoding for large messages.
+        val bodyStartedAt = System.currentTimeMillis()
         try {
-            processPart(msg, state)
+            if (fetchBody) {
+                processPart(msg, state)
+            } else {
+                collectAttachments(msg, state.attachments, messageId)
+            }
         } catch (e: Exception) {
-            throw ProviderContentException("Could not fetch or parse message $messageId", e)
+            if (fetchBody) throw ProviderContentException("Could not fetch or parse message $messageId", e)
+        }
+        if (fetchBody) {
+            android.util.Log.d("ImapTiming", "[ImapTiming] thread=$threadId stage=body_fetch message=$messageId elapsedMs=${System.currentTimeMillis() - bodyStartedAt}")
         }
 
         val preCleanHtml = state.htmlBody
@@ -406,6 +460,9 @@ class ImapProvider(
             android.text.Html.fromHtml(preCleanHtml).toString()
         } catch (e: Exception) {
             preCleanHtml.replace(Regex("<[^>]+>"), " ")
+        }
+        if (fetchBody) {
+            android.util.Log.d("ImapTiming", "[ImapTiming] thread=$threadId stage=mime_parse message=$messageId elapsedMs=${System.currentTimeMillis() - bodyStartedAt}")
         }
 
 
@@ -420,7 +477,7 @@ class ImapProvider(
             plainClean = cleanHtml.replace(Regex("\\s+"), " ").trim()
         }
 
-        val body = state.htmlBody.ifEmpty { plainClean.replace("\n", "<br>") }
+        val body = if (fetchBody) state.htmlBody.ifEmpty { plainClean.replace("\n", "<br>") } else ""
         val snippet = plainClean.replace(Regex("\\s+"), " ").trim().take(150)
 
         val providerMsg = ProviderMessage(
@@ -808,7 +865,6 @@ class ImapProvider(
     }
 
     private fun resolveSearchFolders(hints: List<String>): List<String> {
-        val allFolders = folderNamesCache.values.toList()
         if (hints.isEmpty()) {
             return listOfNotNull(
                 folderNamesCache[EmailFolder.INBOX],
@@ -819,9 +875,9 @@ class ImapProvider(
         val mapped = hints.mapNotNull { hint ->
             try { folderNamesCache[EmailFolder.valueOf(hint)] } catch (_: Exception) { null }
         }
-        // Hints prioritize the likely mailbox, then the remaining known folders
-        // complete the search so stale labels cannot make Trash/Spam/Drafts fail.
-        return (mapped + allFolders).distinct()
+        // Hints are searched first; remaining folders are fallback locations for
+        // messages moved since the local header sync.
+        return (mapped + folderNamesCache.values).distinct()
     }
 
     private suspend fun saveToSentFolder(message: jakarta.mail.Message) {

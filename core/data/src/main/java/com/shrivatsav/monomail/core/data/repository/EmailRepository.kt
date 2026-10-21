@@ -1,6 +1,9 @@
 package com.shrivatsav.monomail.core.data.repository
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.Uri
 import android.util.Log
 import java.io.File
@@ -12,6 +15,8 @@ import com.shrivatsav.monomail.core.data.worker.ScheduledSendWorker
 import com.shrivatsav.monomail.core.data.worker.BodyBackfillService
 import java.util.UUID
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
 import com.google.gson.Gson
 import com.shrivatsav.monomail.core.data.auth.AccountManager
 import com.shrivatsav.monomail.core.data.auth.UserProfile
@@ -39,6 +44,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -169,23 +175,23 @@ class EmailRepository(
         return when (tab) {
             InboxTab.UNIFIED -> threadDao.getAllInboxThreads()
             else -> threadDao.getInboxThreads(accountId)
-        }.map { list -> list.map { it.toDomainModel() } }
+        }.map { list -> list.map { it.toDomainModel() } }.distinctUntilChanged()
     }
     fun getAllInboxThreadsFlow(): Flow<List<EmailThread>> {
-        return threadDao.getAllInboxThreads().map { list -> list.map { it.toDomainModel() } }
+        return threadDao.getAllInboxThreads().map { list -> list.map { it.toDomainModel() } }.distinctUntilChanged()
     }
     fun getSentThreadsFlow(accountId: String): Flow<List<EmailThread>> =
-        threadDao.getSentThreads(accountId).map { list -> list.map { it.toDomainModel() } }
+        threadDao.getSentThreads(accountId).map { list -> list.map { it.toDomainModel() } }.distinctUntilChanged()
     fun getArchivedThreadsFlow(accountId: String): Flow<List<EmailThread>> =
-        threadDao.getArchivedThreads(accountId).map { list -> list.map { it.toDomainModel() } }
+        threadDao.getArchivedThreads(accountId).map { list -> list.map { it.toDomainModel() } }.distinctUntilChanged()
     fun getStarredThreadsFlow(accountId: String): Flow<List<EmailThread>> =
-        threadDao.getStarredThreads(accountId).map { list -> list.map { it.toDomainModel() } }
+        threadDao.getStarredThreads(accountId).map { list -> list.map { it.toDomainModel() } }.distinctUntilChanged()
     fun getTrashThreadsFlow(accountId: String): Flow<List<EmailThread>> =
-        threadDao.getTrashThreads(accountId).map { list -> list.map { it.toDomainModel() } }
+        threadDao.getTrashThreads(accountId).map { list -> list.map { it.toDomainModel() } }.distinctUntilChanged()
     fun getSnoozedThreadsFlow(accountId: String): Flow<List<EmailThread>> =
-        threadDao.getSnoozedThreads(accountId).map { list -> list.map { it.toDomainModel() } }
+        threadDao.getSnoozedThreads(accountId).map { list -> list.map { it.toDomainModel() } }.distinctUntilChanged()
     fun getSpamThreadsFlow(accountId: String): Flow<List<EmailThread>> =
-        threadDao.getSpamThreads(accountId).map { list -> list.map { it.toDomainModel() } }
+        threadDao.getSpamThreads(accountId).map { list -> list.map { it.toDomainModel() } }.distinctUntilChanged()
     fun getAllSentThreadsFlow(): Flow<List<EmailThread>> =
         threadDao.getAllSentThreads().map { list -> list.map { it.toDomainModel() } }
     fun getAllArchivedThreadsFlow(): Flow<List<EmailThread>> =
@@ -354,8 +360,9 @@ class EmailRepository(
         }
     }
 
-    /** Serializes concurrent refreshes (ViewModel pull-to-refresh + periodic worker) so they queue instead of colliding on the shared IMAP connection. */
-    private val refreshMutex = Mutex()
+    /** Serializes refreshes per account without blocking unrelated accounts. */
+    private val refreshMutexes = ConcurrentHashMap<String, Mutex>()
+    private val activeDetailRequests = ConcurrentHashMap<String, AtomicInteger>()
     /** Prevent header/list writes from racing a detail or backfill body write with stale empty content. */
     private val emailContentWriteMutex = Mutex()
     /** Single-flight guard for body backfill sweeps (service + inline fallback). */
@@ -379,7 +386,9 @@ class EmailRepository(
      *  send (bad credentials, dead SMTP server) cannot retry forever. */
     private val PENDING_SEND_MAX_RETRIES = 5
 
-    suspend fun refreshInbox(tab: InboxTab, pageToken: String? = null, query: String? = null, accountId: String? = null): Result<String?> = refreshMutex.withLock {
+    suspend fun refreshInbox(tab: InboxTab, pageToken: String? = null, query: String? = null, accountId: String? = null): Result<String?> {
+        val lockAccountId = accountId ?: getActiveAccountId()
+        return refreshMutexes.getOrPut(lockAccountId) { Mutex() }.withLock {
         return try {
             val resolvedProvider = if (accountId != null) getProviderForAccount(accountId) else getActiveProvider()
             if (resolvedProvider == null) return Result.failure(Exception(NO_ACTIVE_PROVIDER))
@@ -409,6 +418,7 @@ class EmailRepository(
                 // Null when the tab is empty → full folder fetch on first open.
                 minOf(stored, System.currentTimeMillis())
             }
+
             val listResponse = provider.listThreads(
                 folder = folder,
                 bodyFetchLimitMs = getBodyFetchLimitMs(),
@@ -467,6 +477,19 @@ class EmailRepository(
             Result.failure(e)
         }
     }
+    }
+
+    suspend fun <T> withDetailRequest(accountId: String, block: suspend () -> T): T {
+        activeDetailRequests.getOrPut(accountId) { AtomicInteger() }.incrementAndGet()
+        return try {
+            block()
+        } finally {
+            activeDetailRequests[accountId]?.let { counter ->
+                if (counter.decrementAndGet() == 0) activeDetailRequests.remove(accountId, counter)
+            }
+        }
+    }
+
     /**
      * Full deep sync for initial account setup. Iterates all pages since [days] ago
      * and publishes monotonic progress via [syncProgress].
@@ -591,6 +614,10 @@ class EmailRepository(
     val bodyBackfillError: StateFlow<String?> = _bodyBackfillError.asStateFlow()
 
     suspend fun triggerBodyBackfill(accountId: String) {
+        if (activeDetailRequests[accountId]?.get() ?: 0 > 0) {
+            Log.d("EmailRepo", "Body backfill deferred while detail is active for $accountId")
+            return
+        }
         // Cooldown: skip if a sweep finished recently — prevents the restart loop
         // where new headers (Sent folder, thread members) inflate the count between sweeps.
         val elapsed = System.currentTimeMillis() - lastBackfillFinished
@@ -607,6 +634,10 @@ class EmailRepository(
             android.util.Log.d("EmailRepo", "Body backfill skipped: account provider is ${account.provider}, only IMAP downloads bodies")
             return
         }
+        if (!isBackfillNetworkAllowed()) {
+            Log.d("EmailRepo", "Body backfill deferred until charging or an unmetered network is available")
+            return
+        }
         try {
             com.shrivatsav.monomail.core.data.worker.BodyBackfillService.start(context, accountId)
         } catch (e: Exception) {
@@ -617,7 +648,19 @@ class EmailRepository(
         }
     }
 
-    suspend fun startBodyBackfill(accountId: String, maxEmails: Int = 500) {
+    suspend fun startBodyBackfill(
+        accountId: String,
+        maxEmails: Int = 20,
+        allowMetered: Boolean = false
+    ) {
+        if (!allowMetered && !isBackfillNetworkAllowed()) {
+            Log.d("EmailRepo", "Body backfill deferred until charging or an unmetered network is available")
+            return
+        }
+        if (activeDetailRequests[accountId]?.get() ?: 0 > 0) {
+            Log.d("EmailRepo", "Body backfill skipped while detail is active for $accountId")
+            return
+        }
         // Single-flight: concurrent sweeps each compute their own "missing"
         // total and fight over the same notification, making the banner flip
         // between ranges (e.g. 70 vs 447).
@@ -638,6 +681,18 @@ class EmailRepository(
             activeBackfillJob = null
             backfillMutex.unlock()
         }
+    }
+
+    private fun isBackfillNetworkAllowed(): Boolean {
+        val connectivity = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+            ?: return false
+        val network = connectivity.activeNetwork ?: return false
+        val capabilities = connectivity.getNetworkCapabilities(network) ?: return false
+        val unmetered = capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
+        val battery = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+        val status = battery?.getIntExtra("status", -1) ?: -1
+        val charging = status == 2 || status == 5
+        return unmetered || charging
     }
 
     /** True when [e] (or any cause in its chain) indicates the connection
@@ -696,6 +751,7 @@ class EmailRepository(
                 compareBy<EmailBodySlimProjection>({ folderRank(it.labels) })
                     .thenByDescending { it.date }
             )
+            val emailsByThread = missing.groupBy { it.threadId }
             // Download several threads at once — the IMAP connection pool
             // serves up to 5 concurrent connections (Gmail allows 15 per
             val slots = Semaphore(IMAP_BACKFILL_CONCURRENCY)
@@ -709,9 +765,10 @@ class EmailRepository(
                 for (threadMeta in sortedThreadIds) {
                     launch {
                         slots.withPermit {
+                            if (activeDetailRequests[accountId]?.get() ?: 0 > 0) return@withPermit
                             if (connectionAborted.get()) return@withPermit
                             val threadId = threadMeta.threadId
-                            val threadEmails = missing.filter { it.threadId == threadId }
+                            val threadEmails = emailsByThread[threadId].orEmpty()
                             // Search likely folders first; IMAP completes the search across
                             // known folders so stale labels cannot hide moved messages.
                             val folderHints = threadEmails.flatMap { it.labels }.distinct()
@@ -873,10 +930,10 @@ class EmailRepository(
             return
         }
         try {
-            com.shrivatsav.monomail.core.data.worker.BodyBackfillService.start(context, accountId)
+            com.shrivatsav.monomail.core.data.worker.BodyBackfillService.start(context, accountId, allowMetered = true)
         } catch (e: Exception) {
             android.util.Log.w("EmailRepo", "Body backfill FGS start denied, running inline", e)
-            startBodyBackfill(accountId)
+            startBodyBackfill(accountId, allowMetered = true)
         }
     }
 
@@ -916,7 +973,11 @@ class EmailRepository(
             )
         }
 
-    suspend fun refreshThread(threadId: String, explicitAccountId: String? = null): Result<Unit> {
+    suspend fun refreshThread(
+        threadId: String,
+        explicitAccountId: String? = null,
+        preferredMessageId: String? = null
+    ): Result<Unit> {
         val accountId = explicitAccountId ?: resolveAccountId(threadId)
         return try {
             val provider = getProviderForAccount(accountId)
@@ -924,23 +985,31 @@ class EmailRepository(
 
             val storedBeforeFetch = emailDao.getEmailEntitiesForThread(threadId, accountId)
             val folderHints = storedBeforeFetch.flatMap { it.labels }.distinct()
-            val threadResponse = provider.getThread(threadId, folderHints)
+            val threadResponse = provider.getThread(threadId, folderHints, preferredMessageId)
             if (threadResponse.messages.isEmpty()) {
                 throw IncompleteProviderResponseException("The mail server returned an empty thread. Please retry.")
             }
 
             var missingFetchedContent = false
+            val writeStartedAt = System.currentTimeMillis()
             emailContentWriteMutex.withLock {
                 val existingById = emailDao.getEmailEntitiesForThread(threadId, accountId).associateBy { it.id }
                 val returnedIds = threadResponse.messages.mapTo(mutableSetOf()) { it.id }
-                if (!threadResponse.isComplete && existingById.values.any { it.body.isBlank() && it.id !in returnedIds }) {
+                if (preferredMessageId == null &&
+                    !threadResponse.isComplete &&
+                    existingById.values.any { it.body.isBlank() && it.id !in returnedIds }
+                ) {
                     missingFetchedContent = true
                 }
                 val emails = threadResponse.messages.map { msg ->
                     val existing = existingById[msg.id]
                     val mergedLabels = (msg.folders.map { it.name } + existing?.labels.orEmpty()).distinct()
                     val knownSnippet = msg.snippet.ifBlank { existing?.snippet.orEmpty() }
-                    if (msg.body.isBlank() && knownSnippet.isNotBlank() && existing?.body.isNullOrBlank()) {
+                    if (preferredMessageId == null &&
+                        msg.body.isBlank() &&
+                        knownSnippet.isNotBlank() &&
+                        existing?.body.isNullOrBlank()
+                    ) {
                         missingFetchedContent = true
                     }
                     Email(
@@ -986,6 +1055,7 @@ class EmailRepository(
                     threadDao.updateMessageCount(threadId, accountId, messageCount)
                 }
             }
+            Log.d("EmailRepo", "[ImapTiming] thread=$threadId stage=database_write elapsedMs=${System.currentTimeMillis() - writeStartedAt}")
             if (missingFetchedContent) {
                 throw IncompleteProviderResponseException("Email content was not returned by the mail server. Please retry.")
             }

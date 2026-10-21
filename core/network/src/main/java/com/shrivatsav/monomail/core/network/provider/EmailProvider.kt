@@ -26,7 +26,11 @@ interface EmailProvider {
         sinceDate: Long? = null,
         onProgress: ((Float) -> Unit)? = null
     ): ProviderThreadListResult
-    suspend fun getThread(threadId: String, folderHints: List<String> = emptyList()): ProviderThread
+    suspend fun getThread(
+        threadId: String,
+        folderHints: List<String> = emptyList(),
+        preferredMessageId: String? = null
+    ): ProviderThread
     suspend fun getAttachmentBytes(messageId: String, attachmentId: String): ByteArray?
     suspend fun archiveThread(threadId: String)
     suspend fun unarchiveThread(threadId: String)

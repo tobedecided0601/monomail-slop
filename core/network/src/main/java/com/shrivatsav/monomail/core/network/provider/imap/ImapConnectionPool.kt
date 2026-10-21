@@ -55,12 +55,14 @@ class ImapConnectionPool(
      * pressure) must not be hammered with instant reconnects — that turns a
      * single dropped connection into a reconnect storm.
      */
-    suspend fun <T> withStore(block: suspend (Store) -> T): T = withContext(Dispatchers.IO) {
+    suspend fun <T> withStore(priority: Boolean = false, block: suspend (Store) -> T): T = withContext(Dispatchers.IO) {
         var attempt = 0
         while (true) {
             var active: Store? = null
             try {
-                active = leaseStore()
+                val acquireStartedAt = System.currentTimeMillis()
+                active = leaseStore(priority)
+                Log.d(tag, "[ImapTiming] stage=connection_acquire elapsedMs=${System.currentTimeMillis() - acquireStartedAt}")
                 val result = block(active)
                 returnStore(active)
                 return@withContext result
@@ -120,11 +122,14 @@ class ImapConnectionPool(
      * Take an idle store, or create a new one while under the pool cap,
      * or wait for one to be returned when the pool is saturated.
      */
-    private suspend fun leaseStore(): Store {
+    private suspend fun leaseStore(priority: Boolean): Store {
         while (true) {
             idleStores.tryReceive().getOrNull()?.let { return it }
             val created = createdCount.get()
-            if (created < poolSize && createdCount.compareAndSet(created, created + 1)) {
+            // Keep one connection available for an interactive detail request.
+            // Backfill and sync work cannot consume the reserved slot.
+            val creationLimit = if (priority) poolSize else (poolSize - 1).coerceAtLeast(1)
+            if (created < creationLimit && createdCount.compareAndSet(created, created + 1)) {
                 return try {
                     createStore()
                 } catch (e: Exception) {

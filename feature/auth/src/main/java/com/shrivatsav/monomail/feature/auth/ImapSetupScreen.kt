@@ -24,7 +24,7 @@ import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.automirrored.rounded.Outbound
 import androidx.compose.material.icons.rounded.MoveToInbox
 import androidx.compose.material.icons.rounded.Person
-import androidx.compose.material.icons.rounded.OpenInNew
+import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material.icons.rounded.CheckCircle
@@ -331,7 +331,7 @@ private fun ImapSetupForm(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Icon(
-                    Icons.Rounded.OpenInNew,
+                    Icons.AutoMirrored.Rounded.OpenInNew,
                     contentDescription = null,
                     modifier = Modifier.size(16.dp)
                 )

@@ -33,6 +33,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -1930,7 +1931,7 @@ private fun TopAlertBanner(
                     InboxViewModel.ActionType.ARCHIVE -> Icons.Rounded.Archive
                     InboxViewModel.ActionType.DELETE -> Icons.Rounded.Delete
                     InboxViewModel.ActionType.EMPTY_TRASH -> Icons.Rounded.Delete
-                    InboxViewModel.ActionType.SEND -> Icons.Rounded.Send
+                    InboxViewModel.ActionType.SEND -> Icons.AutoMirrored.Rounded.Send
                     InboxViewModel.ActionType.SNOOZE -> Icons.Rounded.Schedule
                     InboxViewModel.ActionType.UNARCHIVE -> Icons.Rounded.Unarchive
                     InboxViewModel.ActionType.RESTORE -> Icons.Rounded.Restore

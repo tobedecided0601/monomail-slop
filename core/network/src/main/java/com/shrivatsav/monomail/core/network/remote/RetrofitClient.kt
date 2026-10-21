@@ -38,7 +38,6 @@ class RetrofitClient(
                 if (retryResponse.code != 401 && retryResponse.code != 403) return retryResponse
                 retryResponse.close()
             }
-            if (attempt < 2) Thread.sleep(500L * attempt)
         }
         return null
     }

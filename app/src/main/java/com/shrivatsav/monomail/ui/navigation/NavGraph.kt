@@ -3,6 +3,8 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.provider.OpenableColumns
+import androidx.core.content.IntentCompat
+import androidx.core.os.BundleCompat
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -559,7 +561,13 @@ fun NavGraph(
                 val vm: ComposeViewModel = hiltViewModel()
                 val context = LocalContext.current
                 LaunchedEffect(Unit) {
-                    val intent = backStackEntry.arguments?.getParcelable(androidx.navigation.NavController.KEY_DEEP_LINK_INTENT) as? Intent
+                    val intent = backStackEntry.arguments?.let {
+                        BundleCompat.getParcelable(
+                            it,
+                            androidx.navigation.NavController.KEY_DEEP_LINK_INTENT,
+                            Intent::class.java
+                        )
+                    }
                     if (intent != null) applyComposeIntent(intent, context, vm)
                 }
                 ComposeScreen(
@@ -655,9 +663,9 @@ private fun applyComposeIntent(intent: Intent, context: Context, vm: ComposeView
     intent.getStringExtra(Intent.EXTRA_TEXT)?.let { vm.updateBody(it) }
 
     val streamUris = if (action == Intent.ACTION_SEND_MULTIPLE) {
-        intent.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM).orEmpty()
+        IntentCompat.getParcelableArrayListExtra(intent, Intent.EXTRA_STREAM, Uri::class.java).orEmpty()
     } else {
-        listOfNotNull(intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM))
+        listOfNotNull(IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri::class.java))
     }
     streamUris.forEach { vm.addAttachment(readSharedAttachment(context, it)) }
 }

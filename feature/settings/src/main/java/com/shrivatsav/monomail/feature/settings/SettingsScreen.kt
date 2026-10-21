@@ -14,6 +14,7 @@ import androidx.compose.foundation.rememberScrollState
 import com.shrivatsav.monomail.ui.theme.cornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.MenuBook
 import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
@@ -33,7 +34,7 @@ enum class SettingsSection(val icon: ImageVector, val title: String, val subtitl
     ACCOUNTS(Icons.Rounded.ManageAccounts, "Accounts", "Manage accounts, providers, connection status"),
     APPEARANCE(Icons.Rounded.Palette, "Appearance", "Theme, font size, colors"),
     INBOX(Icons.Rounded.Inbox, "Inbox", "Threading, grouping, list density, swipe actions"),
-    READING(Icons.Rounded.MenuBook, "Reading", "Inline attachments, markdown renderer"),
+    READING(Icons.AutoMirrored.Rounded.MenuBook, "Reading", "Inline attachments, markdown renderer"),
     PRIVACY(Icons.Rounded.Shield, "Privacy & Security", "PGP encryption keys, remote images"),
     COMPOSE(Icons.AutoMirrored.Rounded.Send, "Compose", "Reply defaults, confirm send, undo send"),
     NAVIGATION(Icons.Rounded.Explore, "Navigation", "Gestures & actions"),
