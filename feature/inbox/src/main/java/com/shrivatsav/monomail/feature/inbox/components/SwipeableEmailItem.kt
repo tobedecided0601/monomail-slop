@@ -27,6 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.shrivatsav.monomail.data.model.EmailThread
+import com.shrivatsav.monomail.core.data.auth.UserProfile
 import com.shrivatsav.monomail.ui.theme.cornerShape
 import kotlinx.coroutines.launch
 
@@ -50,7 +51,8 @@ internal fun SwipeableEmailItem(
     callbacks: SwipeCallbacks,
     selection: SelectionState = SelectionState(),
     unreadPosition: UnreadPosition = UnreadPosition.SOLO,
-    groupPosition: GroupPosition = GroupPosition.SOLO
+    groupPosition: GroupPosition = GroupPosition.SOLO,
+    accountProfile: UserProfile? = null
 ) {
     var optIsRead by remember(thread.isRead) { mutableStateOf(thread.isRead) }
     var optIsStarred by remember(thread.isStarred) { mutableStateOf(thread.isStarred) }
@@ -115,7 +117,10 @@ internal fun SwipeableEmailItem(
                     onRangeSelect = selection.onRangeSelect,
                     onAvatarLongClick = selection.onAvatarLongClick
                 ),
-                unreadPosition = unreadPosition
+                unreadPosition = unreadPosition,
+                accountProfile = accountProfile,
+                showAccountAttribution = appSettings.unifiedInboxEnabled && appSettings.showAccountAttribution,
+                showAccountAvatarBadge = appSettings.unifiedInboxEnabled && appSettings.showAccountAvatarBadge
             )
         } else {
             SwipeToDismissBox(
@@ -141,7 +146,10 @@ internal fun SwipeableEmailItem(
                             onRangeSelect = selection.onRangeSelect,
                             onAvatarLongClick = selection.onAvatarLongClick
                         ),
-                        unreadPosition = unreadPosition
+                        unreadPosition = unreadPosition,
+                        accountProfile = accountProfile,
+                        showAccountAttribution = appSettings.unifiedInboxEnabled && appSettings.showAccountAttribution,
+                        showAccountAvatarBadge = appSettings.unifiedInboxEnabled && appSettings.showAccountAvatarBadge
                     )
                 }
             }

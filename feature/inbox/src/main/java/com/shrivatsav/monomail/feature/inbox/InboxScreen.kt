@@ -227,6 +227,7 @@ fun InboxScreen(
                             scheduledCount = scheduledCount,
                             onUndo = { viewModel.undoAction() },
                             onOpenProfile = { activeModal = ModalType.PROFILE },
+                            onSettings = navActions.onSettings,
                             showMarkAllRead = appSettings.showMarkAllRead
                         ),
                         isRefreshing = isRefreshing,
@@ -575,7 +576,8 @@ fun InboxScreen(
                                                             }
                                                         ),
                                                         unreadPosition = unreadPos,
-                                                        groupPosition = groupPos
+                                                        groupPosition = groupPos,
+                                                        accountProfile = accounts.firstOrNull { it.id == displayItem.thread.accountId }
                                                     )
                                                 }
 
@@ -635,7 +637,8 @@ fun InboxScreen(
                                                                     }
                                                                 ),
                                                                 unreadPosition = unreadPos,
-                                                                groupPosition = groupPos
+                                                                groupPosition = groupPos,
+                                                                accountProfile = accounts.firstOrNull { it.id == displayItem.thread.accountId }
                                                             )
                                                         }
                                                     }

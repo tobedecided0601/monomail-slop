@@ -24,6 +24,7 @@ Monochrome email client for Android — Jetpack Compose, Material 3 Expressive. 
 - **Navigation**: Pull-to-refresh, paginated scroll, scroll position retention per tab.
 - **Actions**: Swipe gestures (configurable L/R), long-press actions, bulk multi-select, undo toast (4s), mark-all-read.
 - **Organization**: Smart sender grouping, snooze (1hr/tomorrow/weekend/next week), date headers, calendar badge for scheduled.
+- **Account context**: Optional account email attribution and account-photo badges in Unified Inbox; inbox actions, accounts, and settings live in the overflow menu.
 
 ### Conversation & Detail View
 - **Threading**: Collapsible thread view, inline chain view (configurable), thread connecting lines, alternating backgrounds, CC/BCC expand.

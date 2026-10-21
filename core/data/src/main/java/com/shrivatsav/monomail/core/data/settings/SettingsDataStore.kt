@@ -104,6 +104,8 @@ data class AppSettings(
     val swipeThreshold: Float = 0.40f,
     val addSignature: Boolean = true,
     val use24HourTime: Boolean = false,
+    val showAccountAttribution: Boolean = false,
+    val showAccountAvatarBadge: Boolean = false,
 )
 class SettingsDataStore(private val context: Context) {
     private val gson = Gson()
@@ -147,6 +149,8 @@ class SettingsDataStore(private val context: Context) {
         val SWIPE_THRESHOLD = floatPreferencesKey("swipe_threshold")
         val ADD_SIGNATURE = booleanPreferencesKey("add_signature")
         val USE_24_HOUR_TIME = booleanPreferencesKey("use_24_hour_time")
+        val SHOW_ACCOUNT_ATTRIBUTION = booleanPreferencesKey("show_account_attribution")
+        val SHOW_ACCOUNT_AVATAR_BADGE = booleanPreferencesKey("show_account_avatar_badge")
         fun notificationProfileKey(accountId: String) =
             stringPreferencesKey("notification_profile_$accountId")
     }
@@ -200,6 +204,8 @@ class SettingsDataStore(private val context: Context) {
             swipeThreshold = prefs[Keys.SWIPE_THRESHOLD]?.coerceIn(0.20f, 0.60f) ?: 0.40f,
             addSignature = prefs[Keys.ADD_SIGNATURE] ?: true,
             use24HourTime = prefs[Keys.USE_24_HOUR_TIME] ?: false,
+            showAccountAttribution = prefs[Keys.SHOW_ACCOUNT_ATTRIBUTION] ?: false,
+            showAccountAvatarBadge = prefs[Keys.SHOW_ACCOUNT_AVATAR_BADGE] ?: false,
         )
     }
     private fun parseNotificationProfile(json: String?): NotificationProfile {
@@ -348,6 +354,12 @@ class SettingsDataStore(private val context: Context) {
     }
     suspend fun setUse24HourTime(enabled: Boolean) {
         context.dataStore.edit { it[Keys.USE_24_HOUR_TIME] = enabled }
+    }
+    suspend fun setShowAccountAttribution(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.SHOW_ACCOUNT_ATTRIBUTION] = enabled }
+    }
+    suspend fun setShowAccountAvatarBadge(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.SHOW_ACCOUNT_AVATAR_BADGE] = enabled }
     }
     suspend fun getTemplates(): List<EmailTemplate> {
         val prefs = context.dataStore.data.first()

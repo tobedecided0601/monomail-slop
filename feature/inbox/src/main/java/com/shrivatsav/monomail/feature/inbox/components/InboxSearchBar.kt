@@ -41,6 +41,7 @@ data class SearchBarActions(
     val scheduledCount: Int = 0,
     val onUndo: () -> Unit,
     val onOpenProfile: () -> Unit,
+    val onSettings: () -> Unit = {},
     val showMarkAllRead: Boolean = true
 )
 
@@ -113,6 +114,7 @@ internal fun InboxSearchBar(
             shape = MaterialTheme.shapes.extraLarge,
             windowInsets = WindowInsets(0.dp)
         ) {}
+        InboxOverflowMenu(actions = actions)
     }
 }
 
@@ -214,27 +216,46 @@ private fun SearchInputContent(
 
 @Composable
 private fun SearchTrailingIcon(actions: SearchBarActions, display: SearchDisplayState) {
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(end = 4.dp)) {
-        if (actions.scheduledCount > 0) {
-            BadgedBox(badge = {
-                Badge(containerColor = MaterialTheme.colorScheme.error, contentColor = MaterialTheme.colorScheme.onError) {
-                    Text(if (actions.scheduledCount > 99) "99+" else actions.scheduledCount.toString(), style = MaterialTheme.typography.labelSmall)
-                }
-            }) {
-                IconButton(onClick = actions.onScheduledClick, modifier = Modifier.size(40.dp)) {
-                    Icon(Icons.Rounded.CalendarMonth, contentDescription = "Scheduled", tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f), modifier = Modifier.size(25.dp))
-                }
-            }
+    /* Actions are intentionally outside the search field so search remains focused. */
+}
+
+@Composable
+private fun InboxOverflowMenu(actions: SearchBarActions) {
+    var expanded by remember { mutableStateOf(false) }
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(end = 8.dp),
+        contentAlignment = Alignment.CenterEnd
+    ) {
+        IconButton(onClick = { expanded = true }) {
+            Icon(Icons.Rounded.MoreVert, contentDescription = "Inbox actions")
         }
-        if (actions.showMarkAllRead) {
-            IconButton(onClick = actions.onMarkAllRead, modifier = Modifier.size(40.dp)) {
-                Icon(Icons.Rounded.CheckCircle, contentDescription = "Mark all as read", tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f), modifier = Modifier.size(25.dp))
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenuItem(
+                text = { Text("Accounts") },
+                leadingIcon = { Icon(Icons.Rounded.AccountCircle, contentDescription = null) },
+                onClick = { expanded = false; actions.onOpenProfile() }
+            )
+            DropdownMenuItem(
+                text = { Text("Settings") },
+                leadingIcon = { Icon(Icons.Rounded.Settings, contentDescription = null) },
+                onClick = { expanded = false; actions.onSettings() }
+            )
+            if (actions.showMarkAllRead) {
+                DropdownMenuItem(
+                    text = { Text("Mark all as read") },
+                    leadingIcon = { Icon(Icons.Rounded.CheckCircle, contentDescription = null) },
+                    onClick = { expanded = false; actions.onMarkAllRead() }
+                )
             }
-        }
-        if (display.unifiedInboxEnabled && display.accounts.size > 1) {
-            StackedAccountAvatars(accounts = display.accounts, onClick = actions.onOpenProfile)
-        } else {
-            AvatarButton(userProfile = display.userProfile, onClick = actions.onOpenProfile)
+            if (actions.scheduledCount > 0) {
+                DropdownMenuItem(
+                    text = { Text("Scheduled (${actions.scheduledCount})") },
+                    leadingIcon = { Icon(Icons.Rounded.CalendarMonth, contentDescription = null) },
+                    onClick = { expanded = false; actions.onScheduledClick() }
+                )
+            }
         }
     }
 }

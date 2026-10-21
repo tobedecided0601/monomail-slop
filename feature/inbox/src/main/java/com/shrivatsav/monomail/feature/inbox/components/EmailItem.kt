@@ -51,6 +51,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.shrivatsav.monomail.data.model.EmailThread
+import com.shrivatsav.monomail.core.data.auth.UserProfile
 import com.shrivatsav.monomail.ui.theme.MonoOpacity
 import java.time.Instant
 import java.time.LocalDate
@@ -80,6 +81,9 @@ fun EmailItem(
     compactMode: Boolean = false,
     selection: SelectionState = SelectionState(),
     unreadPosition: UnreadPosition = UnreadPosition.SOLO,
+    accountProfile: UserProfile? = null,
+    showAccountAttribution: Boolean = false,
+    showAccountAvatarBadge: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val isUnread = !thread.isRead
@@ -159,12 +163,20 @@ fun EmailItem(
                         selection.onAvatarLongClick()
                     }
                 },
-                modifier = Modifier.padding(top = 2.dp)
+                modifier = Modifier.padding(top = 2.dp),
+                accountProfile = accountProfile,
+                showAccountAvatarBadge = showAccountAvatarBadge
             )
         }
         Spacer(modifier = Modifier.width(16.dp))
         Column(modifier = Modifier.weight(1f)) {
-            EmailItemSenderInfo(thread = thread, isUnread = isUnread, use24HourTime = use24HourTime)
+            EmailItemSenderInfo(
+                thread = thread,
+                isUnread = isUnread,
+                use24HourTime = use24HourTime,
+                accountProfile = accountProfile,
+                showAccountAttribution = showAccountAttribution
+            )
             EmailItemSubject(thread = thread, isUnread = isUnread)
             if (showSnippet) {
                 EmailItemSnippet(thread = thread, compactMode = compactMode)
@@ -175,7 +187,13 @@ fun EmailItem(
 
 
 @Composable
-private fun EmailItemSenderInfo(thread: EmailThread, isUnread: Boolean, use24HourTime: Boolean) {
+private fun EmailItemSenderInfo(
+    thread: EmailThread,
+    isUnread: Boolean,
+    use24HourTime: Boolean,
+    accountProfile: UserProfile?,
+    showAccountAttribution: Boolean
+) {
     val senderWeight = if (isUnread) FontWeight.ExtraBold else FontWeight.Medium
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -195,6 +213,15 @@ private fun EmailItemSenderInfo(thread: EmailThread, isUnread: Boolean, use24Hou
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f, fill = false)
             )
+            if (showAccountAttribution && accountProfile != null) {
+                Text(
+                    text = " · ${accountProfile.email}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
             if (thread.messageCount > 1) {
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
@@ -255,6 +282,8 @@ private fun SenderAvatar(
     isBulkMode: Boolean = false,
     onClick: () -> Unit = {},
     onLongClick: () -> Unit = {},
+    accountProfile: UserProfile? = null,
+    showAccountAvatarBadge: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val avatarModifier = modifier
@@ -277,6 +306,23 @@ private fun SenderAvatar(
             size = 40.dp,
             textStyle = MaterialTheme.typography.titleSmall
         )
+        if (showAccountAvatarBadge && accountProfile != null) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .size(16.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surface)
+                    .padding(2.dp)
+            ) {
+                AvatarCircle(
+                    photoUrl = accountProfile.photoUrl,
+                    displayName = accountProfile.displayName,
+                    size = 12.dp,
+                    textStyle = MaterialTheme.typography.labelSmall
+                )
+            }
+        }
         AnimatedVisibility(
             visible = isBulkMode,
             enter = scaleIn() + fadeIn(),
