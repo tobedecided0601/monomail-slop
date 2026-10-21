@@ -117,6 +117,7 @@ import com.shrivatsav.monomail.data.pgp.PgpDecryptionResult
 import com.shrivatsav.monomail.util.normalizeEmailBody
 import com.shrivatsav.monomail.util.stripUnsafeHtml
 import com.shrivatsav.monomail.util.blockRemoteImageSources
+import com.shrivatsav.monomail.util.replaceTrackingImagesWithIcon
 import androidx.webkit.WebSettingsCompat
 import androidx.webkit.WebViewFeature
 import com.shrivatsav.monomail.ui.theme.MonoTween
@@ -1549,8 +1550,13 @@ private fun buildEmailHtml(
         b
     } else displayBody
 
+    val bodyWithTrackingImagesReplaced = replaceTrackingImagesWithIcon(bodyWithCidPlaceholders)
     val remoteImagesBlocked = !loadRemoteImages && !showRemoteImages
-    val bodyWithBlockedRemoteSources = if (remoteImagesBlocked) blockRemoteImageSources(bodyWithCidPlaceholders) else bodyWithCidPlaceholders
+    val bodyWithBlockedRemoteSources = if (remoteImagesBlocked) {
+        blockRemoteImageSources(bodyWithTrackingImagesReplaced)
+    } else {
+        bodyWithTrackingImagesReplaced
+    }
     val imgBlockCss = if (remoteImagesBlocked) """
         img[src^="http://"] { display: none !important; }
         img[src^="https://"] { display: none !important; }

@@ -3,6 +3,7 @@ package com.shrivatsav.monomail
 import com.shrivatsav.monomail.util.normalizeEmailBody
 import com.shrivatsav.monomail.util.stripUnsafeHtml
 import com.shrivatsav.monomail.util.blockRemoteImageSources
+import com.shrivatsav.monomail.util.replaceTrackingImagesWithIcon
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -136,6 +137,41 @@ class EmailHtmlSafetyTest {
     fun blockRemoteImageSources_preservesCidAndDataSources() {
         val input = """<img src="cid:photo"><img src="data:image/png;base64,AA==">"""
         assertEquals(input, blockRemoteImageSources(input))
+    }
+
+    @Test
+    fun replaceTrackingImagesWithIcon_replacesOnePixelRemoteImage() {
+        val result = replaceTrackingImagesWithIcon(
+            """<img src="https://example.com/open.gif" width="1" height="1">"""
+        )
+
+        assertFalse(result.contains("https://example.com/open.gif"))
+        assertTrue(result.contains("tracking-image"))
+        assertTrue(result.contains("Tracking image blocked"))
+    }
+
+    @Test
+    fun replaceTrackingImagesWithIcon_replacesTrackingUrlAfterImagesAreAllowed() {
+        val result = replaceTrackingImagesWithIcon(
+            """<img src="https://example.com/email/beacon.png">"""
+        )
+
+        assertFalse(result.contains("<img", ignoreCase = true))
+        assertTrue(result.contains("tracking-image"))
+    }
+
+    @Test
+    fun replaceTrackingImagesWithIcon_preservesNormalRemoteImage() {
+        val input = """<img src="https://example.com/images/logo.png" width="120" height="40">"""
+
+        assertEquals(input, replaceTrackingImagesWithIcon(input))
+    }
+
+    @Test
+    fun replaceTrackingImagesWithIcon_preservesInlineImage() {
+        val input = """<img src="cid:tracking-pixel" width="1" height="1">"""
+
+        assertEquals(input, replaceTrackingImagesWithIcon(input))
     }
 
     // ── Fix 3: cardBgColor logic ──

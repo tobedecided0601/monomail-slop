@@ -8,6 +8,7 @@ import com.shrivatsav.monomail.core.data.repository.BODY_BACKFILL_NOTIFICATION_I
 import com.shrivatsav.monomail.core.data.repository.EmailRepository
 import com.shrivatsav.monomail.core.data.repository.buildBodyBackfillNotification
 import com.shrivatsav.monomail.core.data.repository.ensureBodyBackfillChannel
+import com.shrivatsav.monomail.core.data.settings.SettingsDataStore
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -21,13 +22,14 @@ import javax.inject.Inject
 class BodyBackfillService : Service() {
 
     @Inject lateinit var emailRepository: EmailRepository
+    @Inject lateinit var settingsDataStore: SettingsDataStore
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var backfillJob: Job? = null
 
     override fun onCreate() {
         super.onCreate()
-        ensureBodyBackfillChannel(this)
+        ensureBodyBackfillChannel(this, settingsDataStore.settingsFlow.value.showSyncProgressNotifications)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -46,7 +48,11 @@ class BodyBackfillService : Service() {
             return START_NOT_STICKY
         }
 
-        startForeground(BODY_BACKFILL_NOTIFICATION_ID, buildBodyBackfillNotification(this, 0, 0))
+        val showProgressNotifications = settingsDataStore.settingsFlow.value.showSyncProgressNotifications
+        startForeground(
+            BODY_BACKFILL_NOTIFICATION_ID,
+            buildBodyBackfillNotification(this, 0, 0, showProgressNotifications = showProgressNotifications)
+        )
 
         backfillJob = scope.launch {
             try {

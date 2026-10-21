@@ -20,6 +20,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import com.google.gson.Gson
 import com.shrivatsav.monomail.core.data.auth.AccountManager
 import com.shrivatsav.monomail.core.data.auth.UserProfile
+import com.shrivatsav.monomail.core.data.settings.SettingsDataStore
 import com.shrivatsav.monomail.core.database.local.*
 import com.shrivatsav.monomail.core.data.repository.SearchField
 import com.shrivatsav.monomail.data.model.Email
@@ -76,7 +77,8 @@ class EmailRepository(
     private val context: Context,
     private val accountManager: AccountManager,
     private val pendingActionDao: PendingActionDao,
-    private val pendingSendDao: PendingSendDao
+    private val pendingSendDao: PendingSendDao,
+    private val settingsDataStore: SettingsDataStore? = null
 ) {
     private val threadDao = database.threadDao()
     private val emailDao = database.emailDao()
@@ -713,7 +715,9 @@ class EmailRepository(
     }
 
     private suspend fun runBodyBackfillSweep(accountId: String, maxEmails: Int) {
-        val notifier = BodyBackfillNotificationHelper(context)
+        val notifier = BodyBackfillNotificationHelper(context) {
+            settingsDataStore?.settingsFlow?.value?.showSyncProgressNotifications ?: true
+        }
         var sweepCancelled = false
         var total = 0
         try {

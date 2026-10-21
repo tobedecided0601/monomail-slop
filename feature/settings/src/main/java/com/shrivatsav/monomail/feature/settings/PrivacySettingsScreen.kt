@@ -22,7 +22,7 @@ internal fun PrivacySettingsScreen(
             SettingsToggleRow(
                 icon = Icons.Rounded.ImageNotSupported,
                 title = "Load Remote Images",
-                subtitle = "When off, external images in emails are blocked until you tap to load them",
+                subtitle = "When off, external images in emails are blocked until you tap to load them.\nTracking images are not loaded in any circumstances, even if you allow loading remote images.",
                 checked = settings.loadRemoteImages,
                 onCheckedChange = { viewModel.setLoadRemoteImages(it) }
             )

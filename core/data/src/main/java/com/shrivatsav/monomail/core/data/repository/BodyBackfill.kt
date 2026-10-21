@@ -50,15 +50,16 @@ internal const val BODY_BACKFILL_DONE_CHANNEL_ID = "body_backfill_done"
  * progress updates. Recreates the channel once if it exists with an older
  * importance, because channel importance is immutable after creation.
  */
-internal fun ensureBodyBackfillChannel(context: Context) {
+internal fun ensureBodyBackfillChannel(context: Context, showProgressNotifications: Boolean = true) {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
     val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-    if (nm.getNotificationChannel(BODY_BACKFILL_CHANNEL_ID)?.importance == NotificationManager.IMPORTANCE_LOW) return
+    val desiredImportance = if (showProgressNotifications) NotificationManager.IMPORTANCE_LOW else NotificationManager.IMPORTANCE_MIN
+    if (nm.getNotificationChannel(BODY_BACKFILL_CHANNEL_ID)?.importance == desiredImportance) return
     nm.deleteNotificationChannel(BODY_BACKFILL_CHANNEL_ID)
     val channel = NotificationChannel(
         BODY_BACKFILL_CHANNEL_ID,
         "Email content download",
-        NotificationManager.IMPORTANCE_LOW
+        desiredImportance
     ).apply {
         description = "Shows progress while email body content downloads in the background"
     }
@@ -93,13 +94,20 @@ internal fun ensureBodyBackfillDoneChannel(context: Context) {
  * semantics filled the bar regardless of the counter — dropped for correctness.)
  */
 @SuppressLint("NewApi")
-internal fun buildBodyBackfillNotification(context: Context, completed: Int, total: Int, folder: String? = null): Notification {
+internal fun buildBodyBackfillNotification(
+    context: Context,
+    completed: Int,
+    total: Int,
+    folder: String? = null,
+    showProgressNotifications: Boolean = true
+): Notification {
     val builder = Notification.Builder(context, BODY_BACKFILL_CHANNEL_ID)
-        .setSmallIcon(android.R.drawable.stat_sys_download)
+        .setSmallIcon(com.shrivatsav.monomail.core.data.R.drawable.ic_notification_leaf)
         .setContentTitle(if (folder != null) "Downloading $folder content" else "Downloading email content")
         .setContentText(if (total > 0) "$completed of $total" else "Starting...")
         .setOngoing(true)
         .setCategory(Notification.CATEGORY_PROGRESS)
+        .setVisibility(if (showProgressNotifications) Notification.VISIBILITY_PUBLIC else Notification.VISIBILITY_SECRET)
         // Fully silent: the channel is IMPORTANCE_LOW, so no sound on the
         // first post or on any progress update.
         .setOnlyAlertOnce(true)
@@ -149,16 +157,24 @@ internal fun buildBodyBackfillDoneNotification(context: Context): Notification {
         .setAutoCancel(true)
     return builder.build()
 }
-internal class BodyBackfillNotificationHelper(private val context: Context) {
+internal class BodyBackfillNotificationHelper(
+    private val context: Context,
+    private val showProgressNotifications: () -> Boolean = { true }
+) {
 
     private val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
     init {
-        ensureBodyBackfillChannel(context)
+        ensureBodyBackfillChannel(context, showProgressNotifications())
     }
 
     fun showProgress(state: BodyBackfillState) {
-        nm.notify(BODY_BACKFILL_NOTIFICATION_ID, buildBodyBackfillNotification(context, state.completed, state.total, state.folder))
+        val enabled = showProgressNotifications()
+        ensureBodyBackfillChannel(context, enabled)
+        nm.notify(
+            BODY_BACKFILL_NOTIFICATION_ID,
+            buildBodyBackfillNotification(context, state.completed, state.total, state.folder, enabled)
+        )
     }
 
     fun dismiss() {

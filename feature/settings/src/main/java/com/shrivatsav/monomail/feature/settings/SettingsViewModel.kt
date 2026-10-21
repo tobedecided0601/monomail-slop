@@ -33,6 +33,7 @@ class SettingsViewModel @Inject constructor(
     fun setAddSignature(enabled: Boolean) = viewModelScope.launch { settingsDataStore.setAddSignature(enabled) }
     fun setDefaultReply(reply: DefaultReply) = viewModelScope.launch { settingsDataStore.setDefaultReply(reply) }
     fun setDisabledNotificationAccounts(accounts: Set<String>) = viewModelScope.launch { settingsDataStore.setDisabledNotificationAccounts(accounts) }
+    fun setShowSyncProgressNotifications(enabled: Boolean) = viewModelScope.launch { settingsDataStore.setShowSyncProgressNotifications(enabled) }
     fun setNotificationQuickActions(actions: Set<String>) = viewModelScope.launch { settingsDataStore.setNotificationQuickActions(actions) }
     fun notificationProfileFlow(accountId: String) = settingsDataStore.notificationProfileFlow(accountId)
     fun setNotificationProfile(accountId: String, profile: NotificationProfile) =

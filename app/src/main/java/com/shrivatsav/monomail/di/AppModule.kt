@@ -159,6 +159,7 @@ object AppModule {
         @ApplicationContext context: Context,
         accountManager: AccountManager,
         pendingActionDao: com.shrivatsav.monomail.core.database.local.PendingActionDao,
-        pendingSendDao: com.shrivatsav.monomail.core.database.local.PendingSendDao
-    ): EmailRepository = EmailRepository(providerFactory, database, context, accountManager, pendingActionDao, pendingSendDao)
+        pendingSendDao: com.shrivatsav.monomail.core.database.local.PendingSendDao,
+        settingsDataStore: SettingsDataStore
+    ): EmailRepository = EmailRepository(providerFactory, database, context, accountManager, pendingActionDao, pendingSendDao, settingsDataStore)
 }

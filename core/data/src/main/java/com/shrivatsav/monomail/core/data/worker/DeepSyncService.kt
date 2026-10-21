@@ -12,6 +12,7 @@ import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import com.shrivatsav.monomail.core.data.repository.EmailRepository
 import com.shrivatsav.monomail.core.data.repository.DEEP_SYNC_NOTIFICATION_ID
+import com.shrivatsav.monomail.core.data.settings.SettingsDataStore
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -31,6 +32,7 @@ import javax.inject.Inject
 class DeepSyncService : Service() {
 
     @Inject lateinit var emailRepository: EmailRepository
+    @Inject lateinit var settingsDataStore: SettingsDataStore
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val channelId = "deep_sync"
@@ -48,7 +50,14 @@ class DeepSyncService : Service() {
         }
         val days = intent?.getIntExtra("days", 30) ?: 30
 
-        startForeground(notificationId, buildNotification(0, indeterminate = true))
+        startForeground(
+            notificationId,
+            buildNotification(
+                0,
+                indeterminate = true,
+                showProgressNotifications = settingsDataStore.settingsFlow.value.showSyncProgressNotifications
+            )
+        )
 
         var postedDone = false
         scope.launch {
@@ -104,12 +113,18 @@ class DeepSyncService : Service() {
             val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             // Recreate once if it exists with an older importance, because
             // channel importance is immutable after creation.
-            if (nm.getNotificationChannel(channelId)?.importance == NotificationManager.IMPORTANCE_DEFAULT) return
+            val showProgressNotifications = settingsDataStore.settingsFlow.value.showSyncProgressNotifications
+            val desiredImportance = if (showProgressNotifications) {
+                NotificationManager.IMPORTANCE_DEFAULT
+            } else {
+                NotificationManager.IMPORTANCE_MIN
+            }
+            if (nm.getNotificationChannel(channelId)?.importance == desiredImportance) return
             nm.deleteNotificationChannel(channelId)
             val channel = NotificationChannel(
                 channelId,
                 "Inbox sync",
-                NotificationManager.IMPORTANCE_DEFAULT
+                desiredImportance
             ).apply {
                 description = "Shows progress while your inbox is being synced"
             }
@@ -117,9 +132,14 @@ class DeepSyncService : Service() {
         }
     }
 
-    private fun buildNotification(progress: Int, indeterminate: Boolean, folder: String? = null): Notification {
+    private fun buildNotification(
+        progress: Int,
+        indeterminate: Boolean,
+        folder: String? = null,
+        showProgressNotifications: Boolean = true
+    ): Notification {
         return NotificationCompat.Builder(this, channelId)
-            .setSmallIcon(android.R.drawable.stat_sys_download)
+            .setSmallIcon(com.shrivatsav.monomail.core.data.R.drawable.ic_notification_leaf)
             .setContentTitle(if (folder != null) "Syncing $folder" else "Syncing your inbox")
             .setContentText(
                 when {
@@ -130,6 +150,7 @@ class DeepSyncService : Service() {
                 }
             )
             .setProgress(100, progress, indeterminate)
+            .setVisibility(if (showProgressNotifications) Notification.VISIBILITY_PUBLIC else Notification.VISIBILITY_SECRET)
             .setOnlyAlertOnce(true)
             .addAction(0, "Cancel", NotificationActionReceiver.createCancelDeepSyncPendingIntent(this))
             .build()
@@ -141,7 +162,15 @@ class DeepSyncService : Service() {
         // message is processed, so a progress bar pinned at 0% would look stuck.
         // Render it as an animated indeterminate "Searching…" state instead.
         val searching = progress == 0
-        nm.notify(notificationId, buildNotification(progress, searching, folder))
+        nm.notify(
+            notificationId,
+            buildNotification(
+                progress,
+                searching,
+                folder,
+                settingsDataStore.settingsFlow.value.showSyncProgressNotifications
+            )
+        )
     }
 
 

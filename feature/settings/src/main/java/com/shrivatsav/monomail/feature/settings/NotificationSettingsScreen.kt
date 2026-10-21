@@ -32,8 +32,9 @@ internal fun NotificationSettingsScreen(
     val isPlayStoreBuild = !BuildConfig.IS_GITHUB_BUILD
 
     ScrollableSettingsScaffold(title = "Notifications", onBack = onBack) {
-        if (!isPlayStoreBuild) {
-            SettingsCard {
+        GroupLabel(text = "Background sync", modifier = Modifier.padding(horizontal = 16.dp))
+        SettingsCard {
+            if (!isPlayStoreBuild) {
                 BottomSheetPickerRow(
                     icon = Icons.Rounded.Sync,
                     title = "Sync Frequency",
@@ -41,12 +42,20 @@ internal fun NotificationSettingsScreen(
                     options = SyncFrequency.entries.map { it.displayName() },
                     onSelected = { idx -> viewModel.setSyncFrequency(SyncFrequency.entries[idx]) }
                 )
+                CardDivider()
             }
-            Spacer(Modifier.height(16.dp))
+            SettingsToggleRow(
+                icon = Icons.Rounded.Sync,
+                title = "Sync progress notifications",
+                subtitle = "Show progress while email content is downloading",
+                checked = settings.showSyncProgressNotifications,
+                onCheckedChange = viewModel::setShowSyncProgressNotifications
+            )
         }
+        Spacer(Modifier.height(16.dp))
 
         if (accounts.isNotEmpty()) {
-            GroupLabel(text = "Accounts", modifier = Modifier.padding(horizontal = 16.dp))
+            GroupLabel(text = "New email alerts", modifier = Modifier.padding(horizontal = 16.dp))
             SettingsCard {
                 accounts.forEachIndexed { index, account ->
                     val isEnabled = !settings.disabledNotificationAccounts.contains(account.id)
@@ -147,7 +156,7 @@ internal fun NotificationSettingsScreen(
             }
         }
 
-        GroupLabel(text = "Quick Actions", modifier = Modifier.padding(horizontal = 16.dp))
+        GroupLabel(text = "Notification actions", modifier = Modifier.padding(horizontal = 16.dp))
         SettingsCard {
             val quickActions = settings.notificationQuickActions
             val rows = listOf(

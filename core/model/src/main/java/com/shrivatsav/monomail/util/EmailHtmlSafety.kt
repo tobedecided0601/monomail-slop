@@ -32,6 +32,24 @@ fun stripUnsafeHtml(html: String): String {
 fun blockRemoteImageSources(html: String): String =
     html.replace(REMOTE_IMAGE_SOURCE_ATTRIBUTE) { match -> "data-blocked-${match.value.lowercase()}" }
 
+fun replaceTrackingImagesWithIcon(html: String): String =
+    html.replace(IMAGE_TAG) { match ->
+        val tag = match.value
+        if (isTrackingImage(tag)) {
+            """<span class="tracking-image" role="img" aria-label="Tracking image blocked" title="Tracking image blocked">&#128065;&#xFE0E;</span>"""
+        } else {
+            tag
+        }
+    }
+
+private fun isTrackingImage(tag: String): Boolean {
+    val source = REMOTE_IMAGE_SOURCE_VALUE.find(tag)?.groupValues?.get(1)?.lowercase() ?: return false
+    val dimensions = IMAGE_DIMENSION.findAll(tag).mapNotNull { it.groupValues[2].toFloatOrNull() }
+    val styleDimensions = STYLE_DIMENSION.findAll(tag).mapNotNull { it.groupValues[2].toFloatOrNull() }
+    val hasPixelDimension = (dimensions + styleDimensions).any { it <= 1f }
+    return hasPixelDimension || TRACKING_SOURCE_MARKER.containsMatchIn(source)
+}
+
 private fun extractProviderBodyText(trimmedBody: String): String? {
     if (!(trimmedBody.startsWith("[") || trimmedBody.startsWith("{"))) return null
 
@@ -97,3 +115,12 @@ private val HTML_TAG = Pattern.compile(
 )
 private val REMOTE_IMAGE_SOURCE_ATTRIBUTE =
     Regex("""\b(src|srcset)(?=\s*=\s*(?:[\"']\s*)?https?://)""", RegexOption.IGNORE_CASE)
+private val IMAGE_TAG = Regex("""<img\b[^>]*>""", RegexOption.IGNORE_CASE)
+private val REMOTE_IMAGE_SOURCE_VALUE =
+    Regex("""\b(?:src|srcset)\s*=\s*[\"']?\s*((?:https?://)[^\"'\s>]+)""", RegexOption.IGNORE_CASE)
+private val IMAGE_DIMENSION =
+    Regex("""\b(width|height)\s*=\s*[\"']?\s*([0-9]+(?:\.[0-9]+)?)\s*(?:px)?""", RegexOption.IGNORE_CASE)
+private val STYLE_DIMENSION =
+    Regex("""\b(width|height)\s*:\s*([0-9]+(?:\.[0-9]+)?)\s*px""", RegexOption.IGNORE_CASE)
+private val TRACKING_SOURCE_MARKER =
+    Regex("""(?:^|[/_.?&=-])(pixel|tracking|track|beacon|webbug|spacer|transparent)(?:[/_.?&=-]|$)""")
