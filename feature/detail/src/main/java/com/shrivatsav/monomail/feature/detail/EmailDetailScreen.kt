@@ -1,6 +1,7 @@
 package com.shrivatsav.monomail.feature.detail
 
 import com.shrivatsav.monomail.ui.components.AvatarCircle
+import com.shrivatsav.monomail.ui.components.avatarUrlsForEmail
 
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -606,7 +607,8 @@ private fun ConversationEmailItem(
         ) {
             Box(modifier = Modifier.width(40.dp)) {
                 AvatarCircle(
-                    photoUrl = null,
+                    photoUrl = avatarUrlsForEmail(email.fromEmail).domainLogo,
+                    fallbackPhotoUrl = avatarUrlsForEmail(email.fromEmail).gravatar,
                     displayName = displayName(email.from),
                     size = 36.dp,
                     textStyle = MaterialTheme.typography.titleSmall
@@ -1006,7 +1008,8 @@ private fun SenderInfoSection(email: Email, messageCount: Int, use24HourTime: Bo
 private fun SenderDetails(email: Email, isMsgUnread: Boolean, use24HourTime: Boolean) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         AvatarCircle(
-            photoUrl = null,
+            photoUrl = avatarUrlsForEmail(email.fromEmail).domainLogo,
+            fallbackPhotoUrl = avatarUrlsForEmail(email.fromEmail).gravatar,
             displayName = displayName(email.from),
             size = 40.dp,
             textStyle = MaterialTheme.typography.titleMedium

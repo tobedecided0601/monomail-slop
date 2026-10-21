@@ -1,6 +1,8 @@
 package com.shrivatsav.monomail.feature.inbox.components
 
 import com.shrivatsav.monomail.feature.inbox.*
+import com.shrivatsav.monomail.ui.components.AvatarCircle
+import com.shrivatsav.monomail.ui.components.avatarUrlsForEmail
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
@@ -147,6 +149,7 @@ fun EmailItem(
         Box {
             SenderAvatar(
                 senderInitial = senderInitial,
+                senderEmail = thread.fromEmail,
                 isSelected = selection.isSelected,
                 isBulkMode = selection.isBulkMode,
                 onClick = avatarClickAction,
@@ -247,6 +250,7 @@ private fun EmailItemSnippet(thread: EmailThread, compactMode: Boolean) {
 @Composable
 private fun SenderAvatar(
     senderInitial: String,
+    senderEmail: String = "",
     isSelected: Boolean = false,
     isBulkMode: Boolean = false,
     onClick: () -> Unit = {},
@@ -265,17 +269,14 @@ private fun SenderAvatar(
             ),
         contentAlignment = Alignment.Center
     ) {
-        AnimatedVisibility(
-            visible = !isBulkMode,
-            enter = scaleIn() + fadeIn(),
-            exit = scaleOut() + fadeOut()
-        ) {
-            Text(
-                text = senderInitial,
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-        }
+        val avatarUrls = avatarUrlsForEmail(senderEmail)
+        AvatarCircle(
+            photoUrl = avatarUrls.domainLogo,
+            fallbackPhotoUrl = avatarUrls.gravatar,
+            displayName = senderInitial,
+            size = 40.dp,
+            textStyle = MaterialTheme.typography.titleSmall
+        )
         AnimatedVisibility(
             visible = isBulkMode,
             enter = scaleIn() + fadeIn(),

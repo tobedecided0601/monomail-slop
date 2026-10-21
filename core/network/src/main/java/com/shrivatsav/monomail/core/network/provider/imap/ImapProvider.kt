@@ -27,6 +27,7 @@ import jakarta.mail.internet.MimeBodyPart
 import jakarta.mail.internet.MimeMessage
 import jakarta.mail.internet.MimeMultipart
 import jakarta.mail.search.FlagTerm
+import jakarta.mail.search.SearchTerm
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.Properties
@@ -320,13 +321,22 @@ class ImapProvider(
 
         for (folderName in searchFolders) {
             val folderStartedAt = System.currentTimeMillis()
-            val foundPreferred = collectMessagesFromFolder(
-                store = store,
-                folderName = folderName,
-                threadId = threadId,
-                preferredMessageId = preferredMessageId,
-                rawMessages = rawMessages
-            )
+            // A detail screen already knows the tapped Message-ID. Search for
+            // that one message first; resolving References/In-Reply-To can be
+            // much slower on large Yahoo folders and is not needed to render
+            // the selected message from the local conversation cache.
+            val foundPreferred = if (preferredMessageId != null) {
+                collectMessagesFromFolder(
+                    store = store,
+                    folderName = folderName,
+                    threadId = threadId,
+                    preferredMessageId = preferredMessageId,
+                    rawMessages = rawMessages,
+                    preferredOnly = true
+                )
+            } else {
+                false
+            }
             android.util.Log.d(
                 "ImapTiming",
                 "[ImapTiming] thread=$threadId stage=folder_search folder=$folderName elapsedMs=${System.currentTimeMillis() - folderStartedAt}"
@@ -335,6 +345,28 @@ class ImapProvider(
             // remaining conversation members are metadata-only and are loaded
             // from the first folder that contains the target.
             if (foundPreferred || (preferredMessageId == null && rawMessages.isNotEmpty())) break
+        }
+
+        // The direct lookup can miss when a message was moved after the local
+        // folder label was saved. Preserve the old reference search as a
+        // bounded fallback rather than searching every folder twice.
+        if (rawMessages.isEmpty() && preferredMessageId != null) {
+            for (folderName in searchFolders) {
+                val folderStartedAt = System.currentTimeMillis()
+                val foundPreferred = collectMessagesFromFolder(
+                    store = store,
+                    folderName = folderName,
+                    threadId = threadId,
+                    preferredMessageId = preferredMessageId,
+                    rawMessages = rawMessages,
+                    preferredOnly = false
+                )
+                android.util.Log.d(
+                    "ImapTiming",
+                    "[ImapTiming] thread=$threadId stage=folder_search_fallback folder=$folderName elapsedMs=${System.currentTimeMillis() - folderStartedAt}"
+                )
+                if (foundPreferred || rawMessages.isNotEmpty()) break
+            }
         }
 
         if (rawMessages.isEmpty()) {
@@ -358,7 +390,8 @@ class ImapProvider(
         folderName: String,
         threadId: String,
         preferredMessageId: String?,
-        rawMessages: MutableList<ImapRawMessage>
+        rawMessages: MutableList<ImapRawMessage>,
+        preferredOnly: Boolean
     ): Boolean {
         val f = store.getFolder(folderName)
         if (!f.exists()) return false
@@ -368,18 +401,22 @@ class ImapProvider(
             f.open(Folder.READ_ONLY)
             android.util.Log.d("ImapTiming", "[ImapTiming] thread=$threadId stage=folder_open folder=$folderName elapsedMs=${System.currentTimeMillis() - openStartedAt}")
             val threadTerm = jakarta.mail.search.OrTerm(
-                jakarta.mail.search.HeaderTerm(HEADER_MESSAGE_ID, threadId),
+                messageIdSearchTerm(HEADER_MESSAGE_ID, threadId),
                 jakarta.mail.search.OrTerm(
-                    jakarta.mail.search.HeaderTerm(HEADER_REFERENCES, threadId),
-                    jakarta.mail.search.HeaderTerm(HEADER_IN_REPLY_TO, threadId)
+                    messageIdSearchTerm(HEADER_REFERENCES, threadId),
+                    messageIdSearchTerm(HEADER_IN_REPLY_TO, threadId)
                 )
             )
-            val searchTerm = preferredMessageId?.let {
-                jakarta.mail.search.OrTerm(
-                    threadTerm,
-                    jakarta.mail.search.HeaderTerm(HEADER_MESSAGE_ID, it)
-                )
-            } ?: threadTerm
+            val searchTerm = if (preferredOnly && preferredMessageId != null) {
+                messageIdSearchTerm(HEADER_MESSAGE_ID, preferredMessageId)
+            } else {
+                preferredMessageId?.let {
+                    jakarta.mail.search.OrTerm(
+                        threadTerm,
+                        messageIdSearchTerm(HEADER_MESSAGE_ID, it)
+                    )
+                } ?: threadTerm
+            }
             val matchingMessages = f.search(searchTerm)
             if (matchingMessages.isEmpty()) return false
 
@@ -395,14 +432,16 @@ class ImapProvider(
             var foundPreferred = false
             val orderedMessages = matchingMessages.sortedWith(
                 compareBy { msg ->
-                    if (preferredMessageId != null &&
-                        msg.getHeader(HEADER_MESSAGE_ID)?.firstOrNull() == preferredMessageId
+                    if (preferredMessageId != null && messageIdsMatch(
+                            msg.getHeader(HEADER_MESSAGE_ID)?.firstOrNull(),
+                            preferredMessageId
+                        )
                     ) 0 else 1
                 }
             )
             for (msg in orderedMessages) {
                 val messageId = msg.getHeader(HEADER_MESSAGE_ID)?.firstOrNull()
-                val isPreferred = preferredMessageId != null && messageId == preferredMessageId
+                val isPreferred = preferredMessageId != null && messageIdsMatch(messageId, preferredMessageId)
                 if (isPreferred) foundPreferred = true
                 val raw = threadMessageToRaw(msg, threadId, fetchBody = isPreferred || preferredMessageId == null) ?: continue
                 rawMessages.add(raw)
@@ -879,6 +918,36 @@ class ImapProvider(
         // messages moved since the local header sync.
         return (mapped + folderNamesCache.values).distinct()
     }
+
+    /**
+     * Yahoo has returned equivalent Message-ID headers with and without angle
+     * brackets. Search each form because IMAP servers differ in how they match
+     * HeaderTerm values, then use [messageIdsMatch] for the final decision.
+     */
+    private fun messageIdSearchTerm(header: String, value: String): SearchTerm {
+        val terms = messageIdVariants(value).map { jakarta.mail.search.HeaderTerm(header, it) }
+        var combined: SearchTerm = terms.first()
+        for (term in terms.drop(1)) {
+            combined = jakarta.mail.search.OrTerm(combined, term)
+        }
+        return combined
+    }
+
+    private fun messageIdVariants(value: String): List<String> {
+        val trimmed = value.trim()
+        val normalized = normalizeMessageId(trimmed)
+        return listOf(trimmed, "<$normalized>", normalized)
+            .filter { it.isNotBlank() }
+            .distinct()
+    }
+
+    private fun messageIdsMatch(first: String?, second: String?): Boolean {
+        return first != null && second != null &&
+            normalizeMessageId(first) == normalizeMessageId(second)
+    }
+
+    private fun normalizeMessageId(value: String): String =
+        value.trim().removePrefix("<").removeSuffix(">").trim().lowercase()
 
     private suspend fun saveToSentFolder(message: jakarta.mail.Message) {
         try {

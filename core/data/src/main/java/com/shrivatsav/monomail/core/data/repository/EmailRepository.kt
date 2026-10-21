@@ -987,6 +987,13 @@ class EmailRepository(
             val folderHints = storedBeforeFetch.flatMap { it.labels }.distinct()
             val threadResponse = provider.getThread(threadId, folderHints, preferredMessageId)
             if (threadResponse.messages.isEmpty()) {
+                if (storedBeforeFetch.isNotEmpty()) {
+                    Log.w(
+                        "EmailRepo",
+                        "Thread $threadId returned empty from provider; preserving cached content"
+                    )
+                    return Result.success(Unit)
+                }
                 throw IncompleteProviderResponseException("The mail server returned an empty thread. Please retry.")
             }
 
