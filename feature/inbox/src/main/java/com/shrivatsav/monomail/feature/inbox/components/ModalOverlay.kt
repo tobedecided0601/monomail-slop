@@ -33,6 +33,7 @@ internal data class ModalCallbacks(
     val onSettings: () -> Unit,
     val onNavigateToImapSetup: (String?, String?) -> Unit = { _, _ -> },
     val onToggleUnified: (Boolean) -> Unit = {},
+    val onUpdateAccountPhoto: (UserProfile, String?) -> Unit = { _, _ -> },
 )
 
 @SuppressLint("UnusedContentLambdaTargetStateParameter")
@@ -152,6 +153,7 @@ private fun ModalContentBody(
                             onSettings = callbacks.onSettings,
                             onAddAccount = callbacks.onAddAccount,
                             onToggleUnified = callbacks.onToggleUnified,
+                            onUpdateAccountPhoto = callbacks.onUpdateAccountPhoto,
                         ),
                         unifiedInboxEnabled = unifiedInboxEnabled,
                     )

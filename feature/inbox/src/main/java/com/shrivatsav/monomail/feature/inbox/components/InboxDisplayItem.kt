@@ -2,6 +2,7 @@ package com.shrivatsav.monomail.feature.inbox.components
 
 import com.shrivatsav.monomail.feature.inbox.*
 import com.shrivatsav.monomail.data.model.EmailThread
+import com.shrivatsav.monomail.ui.components.avatarUrlsForEmail
 import java.util.Calendar
 sealed class InboxDisplayItem {
     abstract val key: String
@@ -100,7 +101,7 @@ fun flattenDisplayItems(
                 unreadCount = unreadCount,
                 latestDate = group.date,
                 isExpanded = isExpanded,
-                avatarUrl = null,
+                avatarUrl = avatarUrlsForEmail(group.threads.firstOrNull()?.fromEmail.orEmpty()).domainLogo,
                 tab = tabPrefix
             )
         )

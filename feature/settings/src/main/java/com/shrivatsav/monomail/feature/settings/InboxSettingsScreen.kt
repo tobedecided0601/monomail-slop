@@ -38,23 +38,14 @@ internal fun InboxSettingsScreen(
                 checked = settings.showAccountAttribution,
                 onCheckedChange = { viewModel.setShowAccountAttribution(it) }
             )
-            AnimatedVisibility(
-                visible = settings.showAccountAttribution,
-                enter = expandVertically(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)) + fadeIn(tween(200)),
-                exit = shrinkVertically(tween(200)) + fadeOut(tween(150))
-            ) {
-                Column {
-                    CardDivider()
-                    SettingsToggleRow(
-                        icon = Icons.Rounded.Face,
-                        title = "Account avatar badge",
-                        subtitle = "Overlay the account photo on the sender avatar",
-                        checked = settings.showAccountAvatarBadge,
-                        onCheckedChange = { viewModel.setShowAccountAvatarBadge(it) },
-                        indented = true
-                    )
-                }
-            }
+            CardDivider()
+            SettingsToggleRow(
+                icon = Icons.Rounded.Face,
+                title = "Account avatar badge",
+                subtitle = "Overlay the account photo on the sender avatar",
+                checked = settings.showAccountAvatarBadge,
+                onCheckedChange = { viewModel.setShowAccountAvatarBadge(it) }
+            )
             CardDivider()
             SettingsToggleRow(
                 icon = Icons.Rounded.FolderSpecial,

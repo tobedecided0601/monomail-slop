@@ -228,9 +228,11 @@ fun InboxScreen(
                             onUndo = { viewModel.undoAction() },
                             onOpenProfile = { activeModal = ModalType.PROFILE },
                             onSettings = navActions.onSettings,
+                            onClearSearch = { viewModel.clearSearch() },
                             showMarkAllRead = appSettings.showMarkAllRead
                         ),
                         isRefreshing = isRefreshing,
+                        showOverflowMenu = searchFilters.query.isBlank() && !isSearchFocused,
                         bulkSelection = BulkSelectionState(
                             isBulkMode = isBulkMode,
                             selectedCount = selectedCount,
@@ -245,6 +247,7 @@ fun InboxScreen(
                     SearchFilterBar(
                         filters = searchFilters,
                         onFiltersChanged = { viewModel.updateSearch(it) },
+                        onQueryChanged = { viewModel.updateSearch(searchFilters.copy(query = it)) },
                         visible = isSearchActive
                     )
 
@@ -512,6 +515,7 @@ fun InboxScreen(
                                                         groupName = displayItem.groupName,
                                                         count = displayItem.count,
                                                         unreadCount = displayItem.unreadCount,
+                                                        avatarUrl = displayItem.avatarUrl,
                                                         isExpanded = displayItem.isExpanded,
                                                         onClick = {
                                                             expandedGroupsList =
@@ -809,6 +813,7 @@ fun InboxScreen(
                     onSettings = { activeModal = null; navActions.onSettings() },
                     onNavigateToImapSetup = navActions.onNavigateToImapSetup,
                     onToggleUnified = { viewModel.setUnifiedInboxEnabled(it) }
+                    , onUpdateAccountPhoto = { account, photoUrl -> viewModel.updateAccountPhoto(account, photoUrl) }
                 ),
                 unifiedInboxEnabled = unifiedInboxEnabled
             )
@@ -1537,6 +1542,7 @@ private fun GroupHeaderItem(
     groupName: String,
     count: Int,
     unreadCount: Int,
+    avatarUrl: String?,
     isExpanded: Boolean,
     onClick: () -> Unit
 ) {
@@ -1548,7 +1554,7 @@ private fun GroupHeaderItem(
         verticalAlignment = Alignment.CenterVertically
     ) {
         AvatarCircle(
-            photoUrl = null,
+            photoUrl = avatarUrl,
             displayName = groupName,
             size = 40.dp,
             textStyle = MaterialTheme.typography.titleMedium

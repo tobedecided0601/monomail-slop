@@ -1058,39 +1058,18 @@ internal fun DockBarEditor(
     maxSlots: Int,
     onConfigChanged: (DockConfig) -> Unit
 ) {
-    val allTabs = DockTabId.values().filter { it != DockTabId.UNIFIED }
-    val availableTabs = allTabs.filter { it !in dockConfig.primaryTabs }
-
     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
         Text(
-            text = "Dock tabs (${dockConfig.primaryTabs.size}/$maxSlots)",
-            style = MaterialTheme.typography.labelMedium,
+            text = "Folder picker",
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Text(
+            text = "All mail folders are available from the single active-folder button at the bottom of the inbox.",
+            style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 8.dp)
+            modifier = Modifier.padding(top = 4.dp)
         )
-        PrimaryTabList(
-            primaryTabs = dockConfig.primaryTabs,
-            onReorder = { index, direction ->
-                val list = dockConfig.primaryTabs.toMutableList()
-                val swapIndex = index + direction
-                list[index] = list[swapIndex].also { list[swapIndex] = list[index] }
-                onConfigChanged(DockConfig(primaryTabs = list))
-            },
-            onRemove = { index ->
-                val list = dockConfig.primaryTabs.toMutableList().apply { removeAt(index) }
-                onConfigChanged(DockConfig(primaryTabs = list))
-            }
-        )
-        if (availableTabs.isNotEmpty()) {
-            AvailableTabList(
-                availableTabs = availableTabs,
-                canAdd = dockConfig.primaryTabs.size < maxSlots,
-                onAdd = { tabId ->
-                    val list = dockConfig.primaryTabs.toMutableList().apply { add(tabId) }
-                    onConfigChanged(DockConfig(primaryTabs = list))
-                }
-            )
-        }
     }
 }
 

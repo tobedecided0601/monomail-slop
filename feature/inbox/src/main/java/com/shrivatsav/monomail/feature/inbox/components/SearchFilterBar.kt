@@ -20,6 +20,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AttachFile
 import androidx.compose.material.icons.rounded.Clear
+import androidx.compose.material.icons.rounded.ExpandLess
+import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
@@ -27,9 +29,14 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.clickable
 import com.shrivatsav.monomail.core.data.repository.SearchField
 import com.shrivatsav.monomail.feature.inbox.SearchFilters
 
@@ -38,9 +45,11 @@ import com.shrivatsav.monomail.feature.inbox.SearchFilters
 internal fun SearchFilterBar(
     filters: SearchFilters,
     onFiltersChanged: (SearchFilters) -> Unit,
+    onQueryChanged: (String) -> Unit,
     visible: Boolean,
     modifier: Modifier = Modifier
 ) {
+    var expanded by remember { mutableStateOf(false) }
     AnimatedVisibility(
         visible = visible,
         enter = expandVertically() + fadeIn(),
@@ -52,6 +61,69 @@ internal fun SearchFilterBar(
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 8.dp)
         ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { expanded = !expanded }
+                    .padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Search filters",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f)
+                )
+                Icon(
+                    imageVector = if (expanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                    contentDescription = if (expanded) "Collapse filters" else "Expand filters"
+                )
+            }
+            AnimatedVisibility(visible = expanded) {
+            Column {
+            Text(
+                text = "Search operators",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 8.dp, bottom = 6.dp)
+            )
+            Text(
+                text = "Tap an operator to add it to your search.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 6.dp)
+            )
+            FlowRow(
+                modifier = Modifier
+                    .fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                listOf(
+                    "from:" to "Sender",
+                    "to:" to "Recipient",
+                    "cc:" to "Cc",
+                    "bcc:" to "Bcc",
+                    "subject:" to "Subject",
+                    "body:" to "Body",
+                    "has:attachment" to "Attachments",
+                    "is:unread" to "Unread",
+                    "is:starred" to "Starred",
+                    "in:inbox" to "Inbox",
+                    "after:" to "After date",
+                    "before:" to "Before date",
+                    "-term" to "Exclude"
+                ).forEach { (operator, label) ->
+                    FilterChip(
+                        selected = false,
+                        onClick = {
+                            val separator = if (filters.query.isBlank() || filters.query.endsWith(" ")) "" else " "
+                            onQueryChanged(filters.query + separator + operator)
+                        },
+                        label = { Text(label) }
+                    )
+                }
+            }
             // Field scope chips
             Text(
                 text = "Search in",
@@ -76,8 +148,7 @@ internal fun SearchFilterBar(
                         )
                     )
                 }
-            }
-
+                }
             Spacer(Modifier.height(8.dp))
 
             // Date range chips
@@ -138,6 +209,8 @@ internal fun SearchFilterBar(
             }
         }
     }
+}
+}
 }
 
 private fun todayStart(): Long {

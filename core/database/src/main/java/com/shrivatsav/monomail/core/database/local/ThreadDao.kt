@@ -188,8 +188,8 @@ interface ThreadDao {
     """)
     fun getAllDraftThreads(): Flow<List<ThreadEntity>>
 
-    @Query("SELECT * FROM threads WHERE threadId IN (:threadIds) AND accountId = :accountId ORDER BY date DESC")
-    suspend fun getThreadsByIds(threadIds: List<String>, accountId: String): List<ThreadEntity>
+    @Query("SELECT * FROM threads WHERE threadId IN (:threadIds) AND (:accountId IS NULL OR accountId = :accountId) ORDER BY date DESC")
+    suspend fun getThreadsByIds(threadIds: List<String>, accountId: String?): List<ThreadEntity>
     @Query("SELECT threadId, inInbox, inSent, inArchived, inTrash, inSpam, inDrafts FROM threads WHERE accountId = :accountId")
     suspend fun getThreadFolderFlags(accountId: String): List<ThreadFolderFlagsProjection>
 }

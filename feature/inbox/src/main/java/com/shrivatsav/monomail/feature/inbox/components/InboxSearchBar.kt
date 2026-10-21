@@ -42,6 +42,7 @@ data class SearchBarActions(
     val onUndo: () -> Unit,
     val onOpenProfile: () -> Unit,
     val onSettings: () -> Unit = {},
+    val onClearSearch: () -> Unit = {},
     val showMarkAllRead: Boolean = true
 )
 
@@ -73,6 +74,7 @@ internal fun InboxSearchBar(
     isRefreshing: Boolean,
     bulkSelection: BulkSelectionState = BulkSelectionState(),
     unifiedInboxEnabled: Boolean = false,
+    showOverflowMenu: Boolean = true,
     onFocusChange: ((Boolean) -> Unit)? = null,
 ) {
     val containerColor by animateColorAsState(
@@ -91,8 +93,12 @@ internal fun InboxSearchBar(
             .padding(horizontal = 16.dp, vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        SearchBar(
-            inputField = {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            SearchBar(
+                inputField = {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -109,12 +115,15 @@ internal fun InboxSearchBar(
             },
             expanded = false,
             onExpandedChange = {},
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.weight(1f),
             colors = SearchBarDefaults.colors(containerColor = containerColor),
             shape = MaterialTheme.shapes.extraLarge,
             windowInsets = WindowInsets(0.dp)
-        ) {}
-        InboxOverflowMenu(actions = actions)
+            ) {}
+            if (showOverflowMenu) {
+                InboxOverflowMenu(actions = actions)
+            }
+        }
     }
 }
 
@@ -194,7 +203,7 @@ private fun SearchInputContent(
         interactionSource = interactionSource,
         placeholder = {
             Text(
-                if (display.isRefreshing) "Syncing..." else if (display.unifiedInboxEnabled) "Search all accounts..." else "Search in mail",
+                if (display.isRefreshing) "Syncing..." else if (display.unifiedInboxEnabled) "Search all accounts (try from:, is:, after:)..." else "Search mail (try from:, is:, after:)...",
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
             )
@@ -210,22 +219,21 @@ private fun SearchInputContent(
                 )
             }
         },
-        trailingIcon = { SearchTrailingIcon(actions, display) }
+        trailingIcon = {
+            if (query.isNotEmpty()) {
+                IconButton(onClick = actions.onClearSearch) {
+                    Icon(Icons.Rounded.Clear, contentDescription = "Clear search")
+                }
+            }
+        }
     )
-}
-
-@Composable
-private fun SearchTrailingIcon(actions: SearchBarActions, display: SearchDisplayState) {
-    /* Actions are intentionally outside the search field so search remains focused. */
 }
 
 @Composable
 private fun InboxOverflowMenu(actions: SearchBarActions) {
     var expanded by remember { mutableStateOf(false) }
     Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(end = 8.dp),
+        modifier = Modifier.padding(start = 4.dp),
         contentAlignment = Alignment.CenterEnd
     ) {
         IconButton(onClick = { expanded = true }) {

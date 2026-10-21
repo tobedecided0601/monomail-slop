@@ -45,6 +45,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
@@ -215,7 +216,7 @@ private fun EmailItemSenderInfo(
             )
             if (showAccountAttribution && accountProfile != null) {
                 Text(
-                    text = " · ${accountProfile.email}",
+                    text = " · ${accountProfile.email.substringBefore('@').take(18)}",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
@@ -288,10 +289,9 @@ private fun SenderAvatar(
 ) {
     val avatarModifier = modifier
         .size(40.dp)
-        .clip(CircleShape)
     Box(
         modifier = avatarModifier
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh, CircleShape)
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onLongClick
@@ -314,6 +314,7 @@ private fun SenderAvatar(
                     .clip(CircleShape)
                     .background(MaterialTheme.colorScheme.surface)
                     .padding(2.dp)
+                    .zIndex(1f)
             ) {
                 AvatarCircle(
                     photoUrl = accountProfile.photoUrl,

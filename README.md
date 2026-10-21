@@ -35,6 +35,7 @@ Monochrome email client for Android — Jetpack Compose, Material 3 Expressive. 
 ### Search
 - **Local**: Client-side filter (subject/sender/snippet).
 - **Remote**: Server-side API search with pagination.
+- **Operators**: Supports quoted phrases and `from:`, `to:`, `cc:`, `bcc:`, `subject:`, `body:`, `is:read`, `is:unread`, `is:starred`, `has:attachment`, `in:inbox`, `in:sent`, `in:archive`, `after:YYYY-MM-DD`, `before:YYYY-MM-DD`, and `-term` exclusions.
 
 ### Multi-Account & Push Notifications
 - **Accounts**: Up to 10 accounts (Gmail, Outlook, IMAP).

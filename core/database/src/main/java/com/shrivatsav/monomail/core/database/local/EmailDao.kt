@@ -140,17 +140,33 @@ interface EmailDao {
         SELECT DISTINCT e.threadId FROM emails e
         INNER JOIN emails_fts fts ON e.rowid = fts.docid
         WHERE emails_fts MATCH :ftsQuery
-        AND e.accountId = :accountId
+        AND (:accountId IS NULL OR e.accountId = :accountId)
+        AND (:isRead IS NULL OR e.isRead = :isRead)
+        AND (:isStarred IS NULL OR e.isStarred = :isStarred)
+        AND (:cc IS NULL OR e.ccEmail LIKE '%' || :cc || '%')
+        AND (:bcc IS NULL OR e.bccEmail LIKE '%' || :bcc || '%')
         AND (:dateFrom IS NULL OR e.date >= :dateFrom)
         AND (:dateTo IS NULL OR e.date <= :dateTo)
         AND (:hasAttachments = 0 OR e.attachmentsJson != '[]')
+        AND (:folder IS NULL OR
+            (:folder = 'inbox' AND e.inInbox = 1) OR
+            (:folder = 'sent' AND e.inSent = 1) OR
+            (:folder = 'archive' AND e.inArchived = 1) OR
+            (:folder = 'trash' AND e.inTrash = 1) OR
+            (:folder = 'spam' AND e.inSpam = 1) OR
+            (:folder = 'drafts' AND e.inDrafts = 1))
     """)
     suspend fun searchThreadIds(
         ftsQuery: String,
-        accountId: String,
+        accountId: String?,
         dateFrom: Long?,
         dateTo: Long?,
-        hasAttachments: Boolean
+        hasAttachments: Boolean,
+        isRead: Boolean?,
+        isStarred: Boolean?,
+        folder: String?,
+        cc: String?,
+        bcc: String?
     ): List<String>
 }
 

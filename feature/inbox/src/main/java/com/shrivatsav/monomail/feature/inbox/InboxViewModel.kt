@@ -89,6 +89,11 @@ class InboxViewModel @Inject constructor(
     val uiError = _uiError.asSharedFlow()
     val accounts: StateFlow<List<UserProfile>> = authManager.accountsFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    fun updateAccountPhoto(account: UserProfile, photoUrl: String?) {
+        viewModelScope.launch {
+            authManager.updateAccount(account.copy(photoUrl = photoUrl?.trim()?.takeIf { it.isNotEmpty() }))
+        }
+    }
     private val _activeAccountId = MutableStateFlow(authManager.currentUser?.id)
     private val _unifiedInboxEnabled = MutableStateFlow(false)
     val unifiedInboxEnabled = _unifiedInboxEnabled.asStateFlow()
@@ -472,12 +477,13 @@ class InboxViewModel @Inject constructor(
     }
     fun updateSearch(filters: SearchFilters) {
         _searchFilters.value = filters
-        if (filters.query.isBlank()) {
+        if (filters.isEmpty) {
             _searchResults.value = emptyList()
             return
         }
         viewModelScope.launch {
-            val accountId = _activeAccountId.value ?: return@launch
+            val accountId = if (_unifiedInboxEnabled.value) null else _activeAccountId.value
+            if (!_unifiedInboxEnabled.value && accountId == null) return@launch
             val results = repository.searchThreads(
                 query = filters.query,
                 searchField = filters.searchField,
