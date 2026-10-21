@@ -16,6 +16,7 @@ sealed class InboxDisplayItem {
         val latestDate: Long,
         val isExpanded: Boolean,
         val avatarUrl: String?,
+        val avatarFallbackUrl: String? = null,
         val tab: String = ""
     ) : InboxDisplayItem() {
         override val key: String get() = "${tab}_group_$groupName"
@@ -102,6 +103,7 @@ fun flattenDisplayItems(
                 latestDate = group.date,
                 isExpanded = isExpanded,
                 avatarUrl = avatarUrlsForEmail(group.threads.firstOrNull()?.fromEmail.orEmpty()).domainLogo,
+                avatarFallbackUrl = avatarUrlsForEmail(group.threads.firstOrNull()?.fromEmail.orEmpty()).domainLogoFallback,
                 tab = tabPrefix
             )
         )

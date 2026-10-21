@@ -1,5 +1,11 @@
 package com.shrivatsav.monomail.feature.settings
 
+import android.content.Context
+import android.net.Uri
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -32,6 +38,8 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
+import com.shrivatsav.monomail.ui.components.AvatarCircle
 import kotlinx.coroutines.launch
 import com.shrivatsav.monomail.core.network.provider.imap.ImapAccountConfig
 import com.shrivatsav.monomail.core.data.auth.AuthManager
@@ -40,6 +48,9 @@ import com.shrivatsav.monomail.security.SecurityUtil
 import com.shrivatsav.monomail.core.network.provider.imap.EffectiveSmtp
 import com.shrivatsav.monomail.ui.theme.MonoOpacity
 import com.shrivatsav.monomail.ui.theme.cornerShape
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -50,6 +61,29 @@ internal fun AccountsSettingsScreen(
     val accounts by authManager.accountsFlow.collectAsState(initial = emptyList())
     val reauthInfo by authManager.reauthNeeded.collectAsState()
     var selectedImapAccount by remember { mutableStateOf<UserProfile?>(null) }
+    var avatarAccount by remember { mutableStateOf<UserProfile?>(null) }
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val avatarPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        val account = avatarAccount ?: return@rememberLauncherForActivityResult
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            runCatching { copyAccountAvatar(context, account.id, uri) }
+                .onSuccess { path ->
+                    authManager.updateAccount(account.copy(photoUrl = path))
+                    avatarAccount = null
+                }
+                .onFailure {
+                    android.widget.Toast.makeText(
+                        context,
+                        "Could not save that image",
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                }
+        }
+    }
 
     ScrollableSettingsScaffold(title = "Accounts", onBack = onBack) {
         if (accounts.isEmpty()) {
@@ -64,13 +98,6 @@ internal fun AccountsSettingsScreen(
                     val statusColor = if (isReauthNeeded) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
                     val isImap = account.provider.lowercase() == "imap"
 
-                    val providerIcon = when (account.provider.lowercase()) {
-                        "gmail" -> Icons.Rounded.Email
-                        "outlook" -> Icons.AutoMirrored.Rounded.ForwardToInbox
-                        "imap" -> Icons.Rounded.Storage
-                        else -> Icons.Rounded.AccountCircle
-                    }
-
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -78,12 +105,14 @@ internal fun AccountsSettingsScreen(
                             .padding(horizontal = 16.dp, vertical = 14.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = providerIcon,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.size(24.dp)
-                        )
+                        Box {
+                            AvatarCircle(
+                                photoUrl = account.photoUrl,
+                                displayName = account.displayName,
+                                size = 44.dp,
+                                textStyle = MaterialTheme.typography.titleSmall
+                            )
+                        }
                         Spacer(Modifier.width(16.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
@@ -111,6 +140,12 @@ internal fun AccountsSettingsScreen(
                                 )
                             }
                         }
+                        IconButton(onClick = {
+                            avatarAccount = account
+                            avatarPicker.launch("image/*")
+                        }) {
+                            Icon(Icons.Rounded.Edit, contentDescription = "Change avatar")
+                        }
                     }
                     if (index < accounts.size - 1) {
                         CardDivider()
@@ -130,6 +165,32 @@ internal fun AccountsSettingsScreen(
             onDismiss = { selectedImapAccount = null }
         )
     }
+}
+
+private suspend fun copyAccountAvatar(
+    context: Context,
+    accountId: String,
+    source: Uri
+): String = withContext(Dispatchers.IO) {
+    val directory = File(context.filesDir, "account_avatars").apply { mkdirs() }
+    val destination = File(directory, "${accountId}_${System.currentTimeMillis()}.jpg")
+    val bitmap = context.contentResolver.openInputStream(source)?.use { BitmapFactory.decodeStream(it) }
+        ?: error("Unable to open selected image")
+    val side = minOf(bitmap.width, bitmap.height)
+    val left = (bitmap.width - side) / 2
+    val top = (bitmap.height - side) / 2
+    val cropped = Bitmap.createBitmap(bitmap, left, top, side, side)
+    destination.outputStream().use { output ->
+        check(cropped.compress(Bitmap.CompressFormat.JPEG, 92, output)) {
+            "Unable to save selected image"
+        }
+    }
+    if (cropped !== bitmap) cropped.recycle()
+    bitmap.recycle()
+    directory.listFiles()
+        ?.filter { it.name.startsWith("$accountId.") && it != destination }
+        ?.forEach { it.delete() }
+    destination.absolutePath
 }
 
 @Composable

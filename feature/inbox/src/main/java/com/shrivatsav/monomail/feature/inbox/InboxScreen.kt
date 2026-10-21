@@ -115,6 +115,10 @@ fun InboxScreen(
     val currentThreads = (state as? InboxState.Success)?.threads ?: emptyList()
     val hapticFeedback = LocalHapticFeedback.current
     val focusManager = LocalFocusManager.current
+    val openEmail: (String, String, String?) -> Unit = { accountId, threadId, messageId ->
+        focusManager.clearFocus(force = true)
+        navActions.onEmailClick(accountId, threadId, messageId)
+    }
     var longPressedThread by remember { mutableStateOf<EmailThread?>(null) }
     var activeModal by remember { mutableStateOf<ModalType?>(null) }
     var showSnoozePicker by remember { mutableStateOf(false) }
@@ -516,6 +520,7 @@ fun InboxScreen(
                                                         count = displayItem.count,
                                                         unreadCount = displayItem.unreadCount,
                                                         avatarUrl = displayItem.avatarUrl,
+                                                        avatarFallbackUrl = displayItem.avatarFallbackUrl,
                                                         isExpanded = displayItem.isExpanded,
                                                         onClick = {
                                                             expandedGroupsList =
@@ -561,7 +566,7 @@ fun InboxScreen(
                                                         viewModel = viewModel,
                                                         callbacks = SwipeCallbacks(
                                                             onThreadToDeleteChange = { threadToDelete = it },
-                                                            onEmailClick = { navActions.onEmailClick(displayItem.thread.accountId, displayItem.thread.threadId, displayItem.thread.latestMessageId) },
+                                                            onEmailClick = { openEmail(displayItem.thread.accountId, displayItem.thread.threadId, displayItem.thread.latestMessageId) },
                                                             onLongClick = {
                                                                 hapticFeedback.performHapticFeedback(
                                                                     HapticFeedbackType.LongPress
@@ -622,7 +627,7 @@ fun InboxScreen(
                                                                 viewModel = viewModel,
                                                                 callbacks = SwipeCallbacks(
                                                                     onThreadToDeleteChange = { threadToDelete = it },
-                                                                    onEmailClick = { navActions.onEmailClick(displayItem.thread.accountId, displayItem.thread.threadId, displayItem.thread.latestMessageId) },
+                                                                    onEmailClick = { openEmail(displayItem.thread.accountId, displayItem.thread.threadId, displayItem.thread.latestMessageId) },
                                                                     onLongClick = {
                                                                         hapticFeedback.performHapticFeedback(
                                                                             HapticFeedbackType.LongPress
@@ -770,7 +775,7 @@ fun InboxScreen(
                     use24HourTime = appSettings.use24HourTime,
                     onDismiss = { longPressedThread = null },
                     actions = LongPressMenuActions(
-                        onEmailClick = { navActions.onEmailClick(thread.accountId, thread.threadId, thread.latestMessageId) },
+                        onEmailClick = { openEmail(thread.accountId, thread.threadId, thread.latestMessageId) },
                         onStar = { viewModel.toggleStar(thread.threadId, thread.accountId) },
                         onArchive = { tab -> when (tab) {
                             InboxTab.ARCHIVED -> viewModel.unarchiveThread(thread.threadId, thread.accountId)
@@ -1213,36 +1218,36 @@ private fun BottomFabArea(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(bottom = navBarHeight + 8.dp)
+            .padding(
+                start = 16.dp,
+                end = 16.dp,
+                bottom = navBarHeight + 8.dp
+            )
     ) {
-        BottomDockBar(
-            currentTab = tabForDock,
-            dockConfig = appSettings.dockConfig,
-            unifiedInboxEnabled = unifiedInboxEnabled,
-            appSettings = appSettings,
-            onTabClick = { viewModel.switchTab(it) },
-            modifier = Modifier.fillMaxWidth()
-        )
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(bottom = 12.dp, top = 12.dp)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
+            BottomDockBar(
+                currentTab = tabForDock,
+                dockConfig = appSettings.dockConfig,
+                unifiedInboxEnabled = unifiedInboxEnabled,
+                appSettings = appSettings,
+                onTabClick = { viewModel.switchTab(it) },
+                modifier = Modifier.width(IntrinsicSize.Max)
+            )
+            Spacer(modifier = Modifier.weight(1f))
             AnimatedContent(
-                targetState = when (immediateTab) {
-                    InboxTab.SPAM -> "spam"
-                    else -> "default"
-                },
+                targetState = immediateTab == InboxTab.SPAM,
                 label = "FabIconMorph",
                 transitionSpec = {
                     (fadeIn(tween(180)) + scaleIn(tween(180), initialScale = 0.85f)) togetherWith
                             (fadeOut(tween(120)) + scaleOut(tween(120), targetScale = 0.85f))
                 }
-            ) { state ->
-                when (state) {
-                    "spam" -> MoveToTrashFab(appSettings) { onMoveSpamToTrash() }
-                    else -> ComposeFab(appSettings, navActions.onCompose)
-                }
+            ) { isSpam ->
+                if (isSpam) MoveToTrashFab(appSettings) { onMoveSpamToTrash() }
+                else ComposeFab(appSettings, navActions.onCompose)
             }
         }
     }
@@ -1256,12 +1261,9 @@ private fun MoveToTrashFab(appSettings: com.shrivatsav.monomail.core.data.settin
         contentColor = MaterialTheme.colorScheme.onErrorContainer,
         shape = CircleShape,
         elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 4.dp),
-        modifier = Modifier.height((42 * appSettings.navScale).dp)
+        modifier = Modifier.size((52 * appSettings.navScale).dp)
     ) {
-        Row(modifier = Modifier.padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            Icon(Icons.Rounded.Delete, contentDescription = "Move all to trash", modifier = Modifier.size((22 * appSettings.navScale).dp))
-            Text("Trash", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onErrorContainer)
-        }
+        Icon(Icons.Rounded.Delete, contentDescription = "Move all to trash", modifier = Modifier.size((22 * appSettings.navScale).dp))
     }
 }
 
@@ -1543,6 +1545,7 @@ private fun GroupHeaderItem(
     count: Int,
     unreadCount: Int,
     avatarUrl: String?,
+    avatarFallbackUrl: String?,
     isExpanded: Boolean,
     onClick: () -> Unit
 ) {
@@ -1555,6 +1558,7 @@ private fun GroupHeaderItem(
     ) {
         AvatarCircle(
             photoUrl = avatarUrl,
+            fallbackPhotoUrl = avatarFallbackUrl,
             displayName = groupName,
             size = 40.dp,
             textStyle = MaterialTheme.typography.titleMedium

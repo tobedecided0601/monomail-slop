@@ -154,7 +154,10 @@ fun EmailItem(
         Box {
             SenderAvatar(
                 senderInitial = senderInitial,
-                senderEmail = thread.fromEmail,
+                senderEmail = thread.fromEmail.ifBlank {
+                    Regex("""[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}""", RegexOption.IGNORE_CASE)
+                        .find(thread.from)?.value.orEmpty()
+                },
                 isSelected = selection.isSelected,
                 isBulkMode = selection.isBulkMode,
                 onClick = avatarClickAction,
@@ -302,6 +305,7 @@ private fun SenderAvatar(
         AvatarCircle(
             photoUrl = avatarUrls.domainLogo,
             fallbackPhotoUrl = avatarUrls.gravatar,
+            fallbackPhotoUrl2 = avatarUrls.domainLogoFallback,
             displayName = senderInitial,
             size = 40.dp,
             textStyle = MaterialTheme.typography.titleSmall

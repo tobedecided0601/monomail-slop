@@ -98,7 +98,9 @@ object EmailMapper {
             val email = match.groupValues[2].trim()
             Pair(name.ifEmpty { email }, email)
         } else {
-            Pair(raw.trim(), raw.trim())
+            val email = Regex("""([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})""", RegexOption.IGNORE_CASE)
+                .find(raw.trim())?.value.orEmpty()
+            Pair(raw.trim().ifEmpty { email }, email)
         }
     }
     private fun extractBody(part: MessagePart?): BodyResult {

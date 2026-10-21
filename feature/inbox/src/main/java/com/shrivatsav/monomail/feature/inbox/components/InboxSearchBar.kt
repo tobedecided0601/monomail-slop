@@ -203,7 +203,11 @@ private fun SearchInputContent(
         interactionSource = interactionSource,
         placeholder = {
             Text(
-                if (display.isRefreshing) "Syncing..." else if (display.unifiedInboxEnabled) "Search all accounts (try from:, is:, after:)..." else "Search mail (try from:, is:, after:)...",
+                if (display.isRefreshing) {
+                    "Syncing..."
+                } else {
+                    "Search..."
+                },
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
             )

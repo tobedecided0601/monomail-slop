@@ -175,7 +175,14 @@ class EmailRepository(
     fun getInboxThreadsFlow(tab: InboxTab, accountId: String): Flow<List<EmailThread>> {
         return when (tab) {
             InboxTab.UNIFIED -> threadDao.getAllInboxThreads()
-            else -> threadDao.getInboxThreads(accountId)
+            InboxTab.INBOX -> threadDao.getInboxThreads(accountId)
+            InboxTab.SENT -> threadDao.getSentThreads(accountId)
+            InboxTab.ARCHIVED -> threadDao.getArchivedThreads(accountId)
+            InboxTab.STARRED -> threadDao.getStarredThreads(accountId)
+            InboxTab.TRASH -> threadDao.getTrashThreads(accountId)
+            InboxTab.SNOOZED -> threadDao.getSnoozedThreads(accountId)
+            InboxTab.SPAM -> threadDao.getSpamThreads(accountId)
+            InboxTab.DRAFTS -> threadDao.getDraftThreads(accountId)
         }.map { list -> list.map { it.toDomainModel() } }.distinctUntilChanged()
     }
     fun getAllInboxThreadsFlow(): Flow<List<EmailThread>> {

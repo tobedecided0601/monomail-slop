@@ -102,8 +102,6 @@ private fun ProfileAvatarSection(
     callbacks: ProfileCardCallbacks,
     unifiedInboxEnabled: Boolean
 ) {
-    var editingAccount by remember { mutableStateOf<UserProfile?>(null) }
-    var photoUrl by remember { mutableStateOf("") }
     AnimatedContent(
         targetState = userProfile.id,
         transitionSpec = {
@@ -119,15 +117,6 @@ private fun ProfileAvatarSection(
         ) {
             Box {
                 DraggableAvatarBox(activeProfile, accounts, callbacks, unifiedInboxEnabled)
-                IconButton(
-                    onClick = {
-                        editingAccount = activeProfile
-                        photoUrl = activeProfile.photoUrl.orEmpty()
-                    },
-                    modifier = Modifier.align(Alignment.BottomEnd)
-                ) {
-                    Icon(Icons.Rounded.Edit, contentDescription = "Change account avatar")
-                }
             }
 
             Spacer(Modifier.height(14.dp))
@@ -148,29 +137,6 @@ private fun ProfileAvatarSection(
                 modifier = Modifier.padding(horizontal = 24.dp)
             )
         }
-    }
-    editingAccount?.let { account ->
-        AlertDialog(
-            onDismissRequest = { editingAccount = null },
-            title = { Text("Account avatar") },
-            text = {
-                OutlinedTextField(
-                    value = photoUrl,
-                    onValueChange = { photoUrl = it },
-                    label = { Text("Image URL") },
-                    singleLine = true
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    callbacks.onUpdateAccountPhoto(account, photoUrl)
-                    editingAccount = null
-                }) { Text("Save") }
-            },
-            dismissButton = {
-                TextButton(onClick = { editingAccount = null }) { Text("Cancel") }
-            }
-        )
     }
 }
 

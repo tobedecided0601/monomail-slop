@@ -5,6 +5,7 @@ import com.shrivatsav.monomail.feature.inbox.*
 import com.shrivatsav.monomail.model.InboxTab
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.background
 import com.shrivatsav.monomail.ui.theme.cornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
@@ -17,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.DpOffset
 import com.shrivatsav.monomail.core.data.settings.DockConfig
 import com.shrivatsav.monomail.core.data.settings.DockTabId
 import com.shrivatsav.monomail.core.data.settings.AppSettings
@@ -43,11 +45,13 @@ internal fun BottomDockBar(
                 else MaterialTheme.colorScheme.surfaceContainerHigh,
         shadowElevation = 4.dp,
         onClick = { expanded = true },
-        modifier = modifier
+        modifier = modifier.height(52.dp)
     ) {
         Box {
             Row(
-                modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
@@ -60,7 +64,8 @@ internal fun BottomDockBar(
             }
             DropdownMenu(
                 expanded = expanded,
-                onDismissRequest = { expanded = false }
+                onDismissRequest = { expanded = false },
+                offset = DpOffset(0.dp, (-8).dp)
             ) {
                 tabs.forEachIndexed { index, group ->
                     if (index > 0) HorizontalDivider()
@@ -71,6 +76,11 @@ internal fun BottomDockBar(
                             trailingIcon = if (tab == currentTab) {
                                 { Icon(Icons.Rounded.Check, contentDescription = "Active") }
                             } else null,
+                            modifier = if (tab == currentTab) {
+                                Modifier.background(MaterialTheme.colorScheme.secondaryContainer)
+                            } else {
+                                Modifier
+                            },
                             onClick = {
                                 onTabClick(tab)
                                 expanded = false

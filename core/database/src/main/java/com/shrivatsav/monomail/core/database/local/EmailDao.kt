@@ -50,7 +50,7 @@ interface EmailDao {
     @Query("UPDATE emails SET isRead = :isRead WHERE threadId = :threadId AND accountId = :accountId")
     suspend fun updateThreadEmailsReadStatus(threadId: String, accountId: String, isRead: Boolean)
 
-    @Query("UPDATE emails SET inInbox = 0, inSent = 0, inArchived = 0, inSpam = 0, inTrash = 1 WHERE threadId = :threadId AND accountId = :accountId")
+    @Query("UPDATE emails SET inInbox = 0, inSent = 0, inArchived = 0, inSpam = 0, inDrafts = 0, inTrash = 1 WHERE threadId = :threadId AND accountId = :accountId")
     suspend fun moveThreadEmailsToTrash(threadId: String, accountId: String)
 
     @Query("UPDATE emails SET inTrash = 0, inInbox = 1 WHERE threadId = :threadId AND accountId = :accountId")
@@ -65,10 +65,10 @@ interface EmailDao {
     suspend fun updateEmailReadStatus(emailId: String, accountId: String, isRead: Boolean)
     @Query("UPDATE emails SET inSpam = 0, inInbox = 1 WHERE threadId = :threadId AND accountId = :accountId")
     suspend fun reportThreadEmailsNotSpam(threadId: String, accountId: String)
-    @Query("SELECT * FROM emails WHERE accountId = :accountId AND inInbox = 1 AND inTrash = 0 ORDER BY date DESC LIMIT 500")
+    @Query("SELECT * FROM emails WHERE accountId = :accountId AND inInbox = 1 AND inDrafts = 0 AND inTrash = 0 ORDER BY date DESC LIMIT 500")
     fun getInboxEmails(accountId: String): Flow<List<EmailEntity>>
 
-    @Query("SELECT * FROM emails WHERE inInbox = 1 AND inTrash = 0 ORDER BY date DESC LIMIT 500")
+    @Query("SELECT * FROM emails WHERE inInbox = 1 AND inDrafts = 0 AND inTrash = 0 ORDER BY date DESC LIMIT 500")
     fun getAllInboxEmails(): Flow<List<EmailEntity>>
 
     @Query("SELECT * FROM emails WHERE accountId = :accountId AND inSent = 1 ORDER BY date DESC LIMIT 500")
