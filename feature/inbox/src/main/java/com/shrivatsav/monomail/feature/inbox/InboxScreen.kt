@@ -499,23 +499,18 @@ fun InboxScreen(
                                         contentPadding = PaddingValues(bottom = 100.dp)
                                     ) {
                                         itemsIndexed(displayItems, key = { _, it -> itemKeyFn(it) }) { index, displayItem ->
-                                            com.shrivatsav.monomail.ui.components.AnimatedListItem(
-                                                index = index,
-                                                itemKey = itemKeyFn(displayItem),
-                                                animatedItemsTracker = viewModel.animatedItemsTracker
-                                            ) {
                                                 when (displayItem) {
                                                 is InboxDisplayItem.DateHeader -> {
                                                     com.shrivatsav.monomail.ui.components.SectionHeader(
                                                         label = displayItem.title,
                                                         showTopDivider = false,
-                                                        modifier = Modifier.animateItem().background(MaterialTheme.colorScheme.background)
+                                                        modifier = Modifier.background(MaterialTheme.colorScheme.background)
                                                     )
                                                 }
 
                                                 is InboxDisplayItem.GroupHeader -> {
                                                     GroupHeaderItem(
-                                                        modifier = Modifier.animateItem(),
+                                                        modifier = Modifier,
                                                         groupName = displayItem.groupName,
                                                         count = displayItem.count,
                                                         unreadCount = displayItem.unreadCount,
@@ -559,7 +554,7 @@ fun InboxScreen(
                                                         else -> com.shrivatsav.monomail.feature.inbox.components.UnreadPosition.SOLO
                                                     }
                                                     SwipeableEmailItem(
-                                                        modifier = Modifier.animateItem(),
+                                                        modifier = Modifier,
                                                         thread = displayItem.thread,
                                                         tabForSwipe = currentTab,
                                                         appSettings = appSettings,
@@ -650,7 +645,6 @@ fun InboxScreen(
                                                                 accountProfile = accounts.firstOrNull { it.id == displayItem.thread.accountId }
                                                             )
                                                         }
-                                                    }
                                                 }
                                             }
                                         }
@@ -709,8 +703,8 @@ fun InboxScreen(
             ) {
                     Box(
                         modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(end = 16.dp)
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp)
                     ) {
                         BottomFabArea(
                             immediateTab = immediateTab,
@@ -1218,26 +1212,23 @@ private fun BottomFabArea(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(
-                start = 16.dp,
-                end = 16.dp,
-                bottom = navBarHeight + 8.dp
-            )
+            .padding(bottom = navBarHeight + 8.dp)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically
+        BottomDockBar(
+            currentTab = tabForDock,
+            dockConfig = appSettings.dockConfig,
+            unifiedInboxEnabled = unifiedInboxEnabled,
+            appSettings = appSettings,
+            onTabClick = { viewModel.switchTab(it) },
+            modifier = Modifier
+                .align(Alignment.CenterStart)
+                .width(176.dp)
+        )
+        Box(
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .padding(end = 0.dp)
         ) {
-            BottomDockBar(
-                currentTab = tabForDock,
-                dockConfig = appSettings.dockConfig,
-                unifiedInboxEnabled = unifiedInboxEnabled,
-                appSettings = appSettings,
-                onTabClick = { viewModel.switchTab(it) },
-                modifier = Modifier.width(IntrinsicSize.Max)
-            )
-            Spacer(modifier = Modifier.weight(1f))
             AnimatedContent(
                 targetState = immediateTab == InboxTab.SPAM,
                 label = "FabIconMorph",

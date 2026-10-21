@@ -102,8 +102,16 @@ fun flattenDisplayItems(
                 unreadCount = unreadCount,
                 latestDate = group.date,
                 isExpanded = isExpanded,
-                avatarUrl = avatarUrlsForEmail(group.threads.firstOrNull()?.fromEmail.orEmpty()).domainLogo,
-                avatarFallbackUrl = avatarUrlsForEmail(group.threads.firstOrNull()?.fromEmail.orEmpty()).domainLogoFallback,
+                avatarUrl = avatarUrlsForEmail(
+                    group.threads.firstOrNull()?.fromEmail
+                        ?.takeIf { it.isNotBlank() }
+                        ?: group.threads.firstOrNull()?.from.orEmpty()
+                ).domainLogo,
+                avatarFallbackUrl = avatarUrlsForEmail(
+                    group.threads.firstOrNull()?.fromEmail
+                        ?.takeIf { it.isNotBlank() }
+                        ?: group.threads.firstOrNull()?.from.orEmpty()
+                ).domainLogoFallback,
                 tab = tabPrefix
             )
         )

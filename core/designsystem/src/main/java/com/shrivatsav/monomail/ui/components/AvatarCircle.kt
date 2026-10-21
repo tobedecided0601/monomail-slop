@@ -32,10 +32,16 @@ fun avatarUrlsForEmail(email: String): AvatarUrls {
     val digest = MessageDigest.getInstance("MD5")
         .digest(normalized.toByteArray(Charsets.UTF_8))
         .joinToString("") { "%02x".format(it) }
+    val faviconDomain = when (domain) {
+        "vpb.com.vn" -> "vpbank.com.vn"
+        "cc.yahoo.com" -> "yahoo.com"
+        else -> domain
+    }
+    val googleFavicon = "https://www.google.com/s2/favicons?domain=$faviconDomain&sz=128"
     return AvatarUrls(
-        domainLogo = "https://www.google.com/s2/favicons?domain=$domain&sz=128",
+        domainLogo = googleFavicon,
         gravatar = "https://www.gravatar.com/avatar/$digest?d=404&s=128",
-        domainLogoFallback = "https://icons.duckduckgo.com/ip3/$domain.ico"
+        domainLogoFallback = "https://icons.duckduckgo.com/ip3/$faviconDomain.ico"
     )
 }
 

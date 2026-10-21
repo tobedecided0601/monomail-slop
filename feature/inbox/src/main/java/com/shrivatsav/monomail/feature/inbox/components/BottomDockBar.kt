@@ -17,6 +17,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.DpOffset
 import com.shrivatsav.monomail.core.data.settings.DockConfig
@@ -56,7 +57,13 @@ internal fun BottomDockBar(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Icon(currentTab.tabIcon(unifiedInboxEnabled), contentDescription = null)
-                Text(activeLabel, style = MaterialTheme.typography.labelLarge)
+                Text(
+                    activeLabel,
+                    style = MaterialTheme.typography.labelLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.weight(1f))
                 Icon(
                     if (expanded) Icons.Rounded.KeyboardArrowDown else Icons.Rounded.KeyboardArrowUp,
                     contentDescription = if (expanded) "Close folders" else "Open folders"
