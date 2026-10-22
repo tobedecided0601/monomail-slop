@@ -29,7 +29,8 @@ interface EmailProvider {
     suspend fun getThread(
         threadId: String,
         folderHints: List<String> = emptyList(),
-        preferredMessageId: String? = null
+        preferredMessageId: String? = null,
+        bodyFetchLimitChars: Int? = null
     ): ProviderThread
     suspend fun getAttachmentBytes(messageId: String, attachmentId: String): ByteArray?
     suspend fun archiveThread(threadId: String)

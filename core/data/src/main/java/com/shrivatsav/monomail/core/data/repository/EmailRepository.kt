@@ -783,7 +783,11 @@ class EmailRepository(
                             // known folders so stale labels cannot hide moved messages.
                             val folderHints = threadEmails.flatMap { it.labels }.distinct()
                             try {
-                                val threadResponse = provider.getThread(threadId, folderHints)
+                                val threadResponse = provider.getThread(
+                                    threadId = threadId,
+                                    folderHints = folderHints,
+                                    bodyFetchLimitChars = 32 * 1024
+                                )
                                 val emailById = threadResponse.messages.associateBy { it.id }
 
                                 // Update each missing email in this thread

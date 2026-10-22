@@ -228,9 +228,8 @@ private fun SettingsHubScreen(
         ) {
             Spacer(Modifier.height(4.dp))
 
-            SettingsSection.entries.filter {
-                (it != SettingsSection.DEVELOPER && it != SettingsSection.LOGS) || settings.isDeveloperMode
-            }.forEach { section ->
+            SettingsSection.entries.forEach { section ->
+                if (section == SettingsSection.DEVELOPER && !settings.isDeveloperMode) return@forEach
                 CategoryCard(
                     icon = section.icon,
                     title = section.title,

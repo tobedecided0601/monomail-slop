@@ -314,7 +314,8 @@ class ImapProvider(
     override suspend fun getThread(
         threadId: String,
         folderHints: List<String>,
-        preferredMessageId: String?
+        preferredMessageId: String?,
+        bodyFetchLimitChars: Int?
     ): ProviderThread = withStore(priority = true) { store ->
         val startedAt = System.currentTimeMillis()
         val searchFolders = resolveSearchFolders(folderHints)
@@ -333,7 +334,8 @@ class ImapProvider(
                     threadId = threadId,
                     preferredMessageId = preferredMessageId,
                     rawMessages = rawMessages,
-                    preferredOnly = true
+                    preferredOnly = true,
+                    bodyFetchLimitChars = bodyFetchLimitChars
                 )
             } else {
                 false
@@ -360,7 +362,8 @@ class ImapProvider(
                     threadId = threadId,
                     preferredMessageId = preferredMessageId,
                     rawMessages = rawMessages,
-                    preferredOnly = false
+                    preferredOnly = false,
+                    bodyFetchLimitChars = bodyFetchLimitChars
                 )
                 android.util.Log.d(
                     "ImapTiming",
@@ -392,7 +395,8 @@ class ImapProvider(
         threadId: String,
         preferredMessageId: String?,
         rawMessages: MutableList<ImapRawMessage>,
-        preferredOnly: Boolean
+        preferredOnly: Boolean,
+        bodyFetchLimitChars: Int?
     ): Boolean {
         val f = store.getFolder(folderName)
         if (!f.exists()) return false
@@ -444,7 +448,12 @@ class ImapProvider(
                 val messageId = msg.getHeader(HEADER_MESSAGE_ID)?.firstOrNull()
                 val isPreferred = preferredMessageId != null && messageIdsMatch(messageId, preferredMessageId)
                 if (isPreferred) foundPreferred = true
-                val raw = threadMessageToRaw(msg, threadId, fetchBody = isPreferred || preferredMessageId == null) ?: continue
+                val raw = threadMessageToRaw(
+                    msg,
+                    threadId,
+                    fetchBody = isPreferred || preferredMessageId == null,
+                    bodyFetchLimitChars = bodyFetchLimitChars
+                ) ?: continue
                 rawMessages.add(raw)
             }
             return foundPreferred || preferredMessageId == null
@@ -456,7 +465,12 @@ class ImapProvider(
         }
     }
 
-    private fun threadMessageToRaw(msg: jakarta.mail.Message, threadId: String, fetchBody: Boolean): ImapRawMessage? {
+    private fun threadMessageToRaw(
+        msg: jakarta.mail.Message,
+        threadId: String,
+        fetchBody: Boolean,
+        bodyFetchLimitChars: Int? = null
+    ): ImapRawMessage? {
         val messageId = msg.getHeader(HEADER_MESSAGE_ID)?.firstOrNull() ?: return null
         val references = msg.getHeader(HEADER_REFERENCES)?.joinToString(" ") ?: ""
         val inReplyTo = msg.getHeader(HEADER_IN_REPLY_TO)?.firstOrNull() ?: ""
@@ -484,7 +498,7 @@ class ImapProvider(
         try {
             if (fetchBody) {
                 AppLog.d("ImapTiming", "t1 thread=$threadId message=$messageId IMAP response available")
-                processPart(msg, state)
+                processPart(msg, state, bodyFetchLimitChars ?: MAX_BODY_CHARS)
             } else {
                 collectAttachments(msg, state.attachments, messageId)
             }
@@ -829,7 +843,7 @@ class ImapProvider(
             android.util.Log.w("ImapProvider", "collectAttachments error: ${e.message}")
         }
     }
-    private fun processPart(part: Part, state: BodyParseState) {
+    private fun processPart(part: Part, state: BodyParseState, bodyLimitChars: Int = MAX_BODY_CHARS) {
         val disposition = part.disposition
         val contentType = part.contentType.lowercase()
         val contentId = part.getHeader("Content-ID")?.firstOrNull()?.removeSurrounding("<", ">")
@@ -845,16 +859,16 @@ class ImapProvider(
                 state.attachments.add(EmailAttachmentInfo(id = name, messageId = state.messageId, mimeType = mimeType, name = name, size = part.size))
             }
             part.isMimeType(MIME_TEXT_PLAIN) && state.plainBody.isEmpty() -> {
-                state.plainBody = part.getBodyText(MAX_BODY_CHARS)
+                state.plainBody = part.getBodyText(bodyLimitChars)
             }
             part.isMimeType(MIME_TEXT_HTML) && state.htmlBody.isEmpty() -> {
-                state.htmlBody = part.getBodyText(MAX_BODY_CHARS)
+                state.htmlBody = part.getBodyText(bodyLimitChars)
                 state.bodyIsHtml = true
             }
             part.isMimeType(MIME_MULTIPART) -> {
                 val mp = toMultipart(part)
                 for (i in 0 until mp.count) {
-                    processPart(mp.getBodyPart(i), state)
+                    processPart(mp.getBodyPart(i), state, bodyLimitChars)
                 }
             }
         }

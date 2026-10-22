@@ -1411,7 +1411,13 @@ private fun openExternalLink(context: Context, uri: Uri) {
 }
 
 private fun patchEmailHtml(htmlContent: String): String {
-    val overrideStyle = "<style>html, body { height: auto !important; min-height: unset !important; }</style>"
+    val overrideStyle = """
+        <style>
+            img, video, table { max-width: 100% !important; height: auto !important; }
+            body { word-wrap: break-word; overflow-wrap: break-word; }
+            html, body { height: auto !important; min-height: unset !important; }
+        </style>
+    """.trimIndent()
     return if (htmlContent.contains("</head>", ignoreCase = true)) {
         val index = htmlContent.indexOf("</head>", ignoreCase = true)
         htmlContent.substring(0, index) + overrideStyle + htmlContent.substring(index)

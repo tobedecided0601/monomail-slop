@@ -166,7 +166,7 @@ class OutlookProvider(
         val nextSkip = if (response.nextLink != null) (skip + maxResults).toString() else null
         return ProviderThreadListResult(providerThreads, nextSkip)
     }
-    override suspend fun getThread(threadId: String, folderHints: List<String>, preferredMessageId: String?): ProviderThread = withContext(Dispatchers.IO) {
+    override suspend fun getThread(threadId: String, folderHints: List<String>, preferredMessageId: String?, bodyFetchLimitChars: Int?): ProviderThread = withContext(Dispatchers.IO) {
         ensureFolderIdCache()
         val response = try {
             api.listMessages(

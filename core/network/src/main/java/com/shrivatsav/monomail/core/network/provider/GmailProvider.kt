@@ -156,7 +156,7 @@ class GmailProvider(
         }
         return ProviderThreadListResult(providerThreads, response.nextPageToken)
     }
-    override suspend fun getThread(threadId: String, folderHints: List<String>, preferredMessageId: String?): ProviderThread = withContext(Dispatchers.IO) {
+    override suspend fun getThread(threadId: String, folderHints: List<String>, preferredMessageId: String?, bodyFetchLimitChars: Int?): ProviderThread = withContext(Dispatchers.IO) {
         val rawThread = try {
             api.getThread(threadId)
         } catch (e: HttpException) {
