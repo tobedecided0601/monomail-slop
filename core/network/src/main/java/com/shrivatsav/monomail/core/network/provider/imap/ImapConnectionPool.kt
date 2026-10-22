@@ -17,6 +17,7 @@ import java.net.ConnectException
 import java.net.SocketException
 import java.net.SocketTimeoutException
 import com.shrivatsav.monomail.core.network.provider.EmailFolder
+import com.shrivatsav.monomail.util.AppLog
 
 /**
  * Persistent IMAP connection pool for a single account.
@@ -198,6 +199,9 @@ class ImapConnectionPool(
         props["mail.$protocol.connectiontimeout"] = "10000"  // 10s connect
         props["mail.$protocol.timeout"] = "10000"            // 10s read
         props["mail.$protocol.fetchsize"] = "65536"   // fetch content in 64KB chunks so a capped read stops the download early
+        // Never use BODY[] for content reads. JavaMail will emit BODY.PEEK[]
+        // when this is enabled, avoiding an implicit \Seen state change.
+        props["mail.$protocol.peek"] = "true"
 
         // Keep-alive
         props["mail.$protocol.keepalive"] = "true"
@@ -229,6 +233,7 @@ class ImapConnectionPool(
         newStore.connect(config.username, password)
 
         Log.d(tag, "Connected to ${config.imapHost}:${config.imapPort}")
+        AppLog.d(tag, "Authenticated IMAP connection ready for reuse")
         return newStore
     }
 

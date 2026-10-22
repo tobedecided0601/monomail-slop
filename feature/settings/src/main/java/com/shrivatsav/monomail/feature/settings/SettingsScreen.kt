@@ -40,6 +40,7 @@ enum class SettingsSection(val icon: ImageVector, val title: String, val subtitl
     NAVIGATION(Icons.Rounded.Explore, "Navigation", "Gestures & actions"),
     NOTIFICATIONS(Icons.Rounded.Notifications, "Notifications", "Alerts & sync"),
     DEVELOPER(Icons.Rounded.DeveloperMode, "Developer", "Developer mode & debug tools"),
+    LOGS(Icons.Rounded.Terminal, "Logs", "View IMAP and rendering diagnostics"),
     SUPPORT(Icons.Rounded.Favorite, "Support", "Donate & community")
 }
 
@@ -93,6 +94,7 @@ fun SettingsScreen(
                 viewModel = viewModel,
                 onBack = { currentSection = null }
             )
+            SettingsSection.LOGS -> LogsSettingsScreen(onBack = { currentSection = null })
             SettingsSection.NOTIFICATIONS -> NotificationSettingsScreen(
                 authManager = authManager,
                 viewModel = viewModel,
@@ -226,7 +228,9 @@ private fun SettingsHubScreen(
         ) {
             Spacer(Modifier.height(4.dp))
 
-            SettingsSection.entries.filter { it != SettingsSection.DEVELOPER || settings.isDeveloperMode }.forEach { section ->
+            SettingsSection.entries.filter {
+                (it != SettingsSection.DEVELOPER && it != SettingsSection.LOGS) || settings.isDeveloperMode
+            }.forEach { section ->
                 CategoryCard(
                     icon = section.icon,
                     title = section.title,

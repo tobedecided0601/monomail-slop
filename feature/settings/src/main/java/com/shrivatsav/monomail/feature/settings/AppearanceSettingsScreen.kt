@@ -114,6 +114,7 @@ internal fun AppearanceSettingsScreen(
 internal fun ScrollableSettingsScaffold(
     title: String,
     onBack: () -> Unit,
+    actions: @Composable RowScope.() -> Unit = {},
     content: @Composable ColumnScope.() -> Unit
 ) {
     Scaffold(
@@ -130,6 +131,7 @@ internal fun ScrollableSettingsScaffold(
                         Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.onSurface)
                     }
                 },
+                actions = actions,
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
             )
         }

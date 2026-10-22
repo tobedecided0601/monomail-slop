@@ -98,6 +98,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -129,6 +130,7 @@ import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import com.shrivatsav.monomail.util.AppLog
 
 data class EmailDisplayConfig(
     val isConversationView: Boolean = true,
@@ -816,14 +818,24 @@ private fun MessageBody(
     modifier: Modifier = Modifier
 ) {
     val isEncryptedBlob = isEncryptedBlob(email)
-    val normalizedBody = if (isEncryptedBlob) {
-        normalizeEmailBody("", bodyIsHtml = false)
-    } else {
-        normalizeEmailBody(decryptedResult?.decryptedBody ?: email.body, email.bodyIsHtml)
+    val processedBody by produceState<Pair<String, Boolean>>(
+        initialValue = "" to false,
+        key1 = email.id,
+        key2 = decryptedResult?.decryptedBody,
+        key3 = email.body to email.bodyIsHtml
+    ) {
+        value = withContext(Dispatchers.Default) {
+            val normalized = if (isEncryptedBlob) {
+                normalizeEmailBody("", bodyIsHtml = false)
+            } else {
+                normalizeEmailBody(decryptedResult?.decryptedBody ?: email.body, email.bodyIsHtml)
+            }
+            val text = if (normalized.isHtml) stripUnsafeHtml(normalized.text) else normalized.text
+            text to (!isEncryptedBlob && normalized.isHtml)
+        }
     }
-    val bodyText = normalizedBody.text
-    val bodyIsHtml = !isEncryptedBlob && normalizedBody.isHtml
-    val safeBodyText = if (bodyIsHtml) stripUnsafeHtml(bodyText) else bodyText
+    val safeBodyText = processedBody.first
+    val bodyIsHtml = processedBody.second
     Column(modifier = modifier) {
         EncryptionBadge(decryptedResult)
         if (isEncryptedBlob) {
@@ -1242,6 +1254,7 @@ private fun EmailWebViewCard(
                                 onLinkClick = { pendingLink = it },
                                 onPageFinished = {
                                     if (callbackGeneration == renderGeneration) {
+                                        AppLog.d("ImapTiming", "t4 message=$emailId WebView content rendered")
                                         loadError = null
                                         isLoaded = true
                                     }

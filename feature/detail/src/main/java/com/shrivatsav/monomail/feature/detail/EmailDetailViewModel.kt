@@ -37,6 +37,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
+import com.shrivatsav.monomail.util.AppLog
 
 sealed interface ThreadListItem {
     data class Message(val email: Email, val isFocused: Boolean, val isExpanded: Boolean) : ThreadListItem
@@ -92,6 +93,7 @@ class EmailDetailViewModel @Inject constructor(
         if (threadId.isBlank() || accountId.isBlank()) return
         expandedBodyJobs[emailId] = viewModelScope.launch {
             try {
+                AppLog.d("ImapTiming", "t0 message=$emailId user selected message")
                 val email = repository.getEmailById(emailId, accountId)
                 if (email?.body.isNullOrBlank()) {
                     repository.withDetailRequest(accountId) {

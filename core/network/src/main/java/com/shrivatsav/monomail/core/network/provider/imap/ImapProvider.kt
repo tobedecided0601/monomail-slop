@@ -30,6 +30,7 @@ import jakarta.mail.search.FlagTerm
 import jakarta.mail.search.SearchTerm
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import com.shrivatsav.monomail.util.AppLog
 import java.util.Properties
 import java.util.concurrent.ConcurrentHashMap
 
@@ -477,8 +478,12 @@ class ImapProvider(
 
         val state = BodyParseState(messageId = messageId)
         val bodyStartedAt = System.currentTimeMillis()
+        if (fetchBody) {
+            AppLog.d("ImapTiming", "t0 thread=$threadId message=$messageId body fetch dispatched")
+        }
         try {
             if (fetchBody) {
+                AppLog.d("ImapTiming", "t1 thread=$threadId message=$messageId IMAP response available")
                 processPart(msg, state)
             } else {
                 collectAttachments(msg, state.attachments, messageId)
@@ -487,6 +492,7 @@ class ImapProvider(
             if (fetchBody) throw ProviderContentException("Could not fetch or parse message $messageId", e)
         }
         if (fetchBody) {
+            AppLog.d("ImapTiming", "t2 thread=$threadId message=$messageId body stream read complete elapsedMs=${System.currentTimeMillis() - bodyStartedAt}")
             android.util.Log.d("ImapTiming", "[ImapTiming] thread=$threadId stage=body_fetch message=$messageId elapsedMs=${System.currentTimeMillis() - bodyStartedAt}")
         }
 
@@ -501,6 +507,7 @@ class ImapProvider(
             preCleanHtml.replace(Regex("<[^>]+>"), " ")
         }
         if (fetchBody) {
+            AppLog.d("ImapTiming", "t3 thread=$threadId message=$messageId MIME decode and sanitization complete elapsedMs=${System.currentTimeMillis() - bodyStartedAt}")
             android.util.Log.d("ImapTiming", "[ImapTiming] thread=$threadId stage=mime_parse message=$messageId elapsedMs=${System.currentTimeMillis() - bodyStartedAt}")
         }
 
