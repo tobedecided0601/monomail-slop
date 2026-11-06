@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import com.shrivatsav.monomail.core.data.backup.BackupPref
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -239,6 +240,50 @@ class SettingsDataStore(private val context: Context) {
 
     suspend fun setNotificationProfile(accountId: String, profile: NotificationProfile) {
         context.dataStore.edit { it[Keys.notificationProfileKey(accountId)] = gson.toJson(profile) }
+    }
+
+    /** Every stored preference, typed, for backups. */
+    suspend fun exportPreferences(): Map<String, BackupPref> {
+        val out = LinkedHashMap<String, BackupPref>()
+        for ((key, value) in context.dataStore.data.first().asMap()) {
+            val pref = when (value) {
+                is Boolean -> BackupPref("bool", value.toString())
+                is Int -> BackupPref("int", value.toString())
+                is Long -> BackupPref("long", value.toString())
+                is Float -> BackupPref("float", value.toString())
+                is Double -> BackupPref("double", value.toString())
+                is String -> BackupPref("string", value)
+                is Set<*> -> BackupPref("set", values = value.filterIsInstance<String>())
+                else -> null
+            }
+            if (pref != null) out[key.name] = pref
+        }
+        return out
+    }
+
+    /** Applies preferences from a backup; returns how many were restored. Unknown or malformed entries are skipped. */
+    suspend fun importPreferences(values: Map<String, BackupPref>): Int {
+        var applied = 0
+        context.dataStore.edit { prefs ->
+            for ((name, pref) in values) {
+                try {
+                    when (pref.type) {
+                        "bool" -> prefs[booleanPreferencesKey(name)] = pref.value!!.toBooleanStrict()
+                        "int" -> prefs[intPreferencesKey(name)] = pref.value!!.toInt()
+                        "long" -> prefs[longPreferencesKey(name)] = pref.value!!.toLong()
+                        "float" -> prefs[floatPreferencesKey(name)] = pref.value!!.toFloat()
+                        "double" -> prefs[doublePreferencesKey(name)] = pref.value!!.toDouble()
+                        "string" -> prefs[stringPreferencesKey(name)] = pref.value!!
+                        "set" -> prefs[stringSetPreferencesKey(name)] = pref.values!!.toSet()
+                        else -> continue
+                    }
+                    applied++
+                } catch (e: Exception) {
+                    android.util.Log.w("SettingsDataStore", "Skipping malformed backup preference $name", e)
+                }
+            }
+        }
+        return applied
     }
 
     /**

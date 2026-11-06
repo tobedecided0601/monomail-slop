@@ -51,6 +51,15 @@ object AppModule {
         SettingsDataStore(context)
 
     @Provides @Singleton
+    fun provideBackupManager(
+        @ApplicationContext context: Context,
+        authManager: AuthManager,
+        settingsDataStore: SettingsDataStore,
+        pgpKeyStorage: com.shrivatsav.monomail.data.pgp.PgpKeyStorage
+    ): com.shrivatsav.monomail.core.data.backup.BackupManager =
+        com.shrivatsav.monomail.core.data.backup.BackupManager(context, authManager, settingsDataStore, pgpKeyStorage)
+
+    @Provides @Singleton
     fun provideSentEmailEvents(): MutableSharedFlow<SentEmailEvent> =
         MutableSharedFlow(replay = 1, extraBufferCapacity = 1, onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST)
 

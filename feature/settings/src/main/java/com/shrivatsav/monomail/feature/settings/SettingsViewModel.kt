@@ -17,8 +17,39 @@ import javax.inject.Inject
 enum class UpdateState { IDLE, CHECKING, UP_TO_DATE, UPDATE_AVAILABLE, ERROR }
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
-    private val settingsDataStore: SettingsDataStore
+    private val settingsDataStore: SettingsDataStore,
+    private val backupManager: com.shrivatsav.monomail.core.data.backup.BackupManager
 ) : ViewModel() {
+    private val _backupState = MutableStateFlow<com.shrivatsav.monomail.core.data.backup.BackupUiState>(
+        com.shrivatsav.monomail.core.data.backup.BackupUiState.Idle
+    )
+    val backupState: StateFlow<com.shrivatsav.monomail.core.data.backup.BackupUiState> = _backupState.asStateFlow()
+
+    fun exportBackup(resolver: android.content.ContentResolver, uri: android.net.Uri, passphrase: CharArray) =
+        runBackup { backupManager.exportTo(resolver, uri, passphrase) }
+
+    fun restoreBackup(resolver: android.content.ContentResolver, uri: android.net.Uri, passphrase: CharArray) =
+        runBackup { backupManager.restoreFrom(resolver, uri, passphrase) }
+
+    fun clearBackupState() { _backupState.value = com.shrivatsav.monomail.core.data.backup.BackupUiState.Idle }
+
+    private fun runBackup(block: suspend () -> String) {
+        if (_backupState.value is com.shrivatsav.monomail.core.data.backup.BackupUiState.Working) return
+        _backupState.value = com.shrivatsav.monomail.core.data.backup.BackupUiState.Working
+        viewModelScope.launch {
+            _backupState.value = try {
+                com.shrivatsav.monomail.core.data.backup.BackupUiState.Done(block())
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: com.shrivatsav.monomail.core.data.backup.BackupException) {
+                com.shrivatsav.monomail.core.data.backup.BackupUiState.Failed(e.message ?: "Backup failed.")
+            } catch (e: Exception) {
+                android.util.Log.w("SettingsViewModel", "Backup operation failed", e)
+                com.shrivatsav.monomail.core.data.backup.BackupUiState.Failed("Something went wrong: ${e.message ?: e.javaClass.simpleName}")
+            }
+        }
+    }
+
     val settings: StateFlow<AppSettings> = settingsDataStore.settingsFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AppSettings())
     fun setThemeMode(mode: ThemeMode) = viewModelScope.launch { settingsDataStore.setThemeMode(mode) }

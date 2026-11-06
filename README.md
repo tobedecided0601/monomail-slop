@@ -47,6 +47,11 @@ Monochrome email client for Android — Jetpack Compose, Material 3 Expressive. 
 - **Advanced**: Schedule send, undo send (5-30s configurable), send-as aliases, email templates.
 - **Editor**: WebView contenteditable editor with formatting toolbar (B/I/U/lists/quote).
 
+### Backup & Restore
+- **Backup**: Settings → Backup & restore → Create backup saves IMAP accounts (server settings and passwords), all app settings, notification preferences, templates and PGP keys to a single file, encrypted with a passphrase you choose (PBKDF2-SHA256 + AES-256-GCM). Downloaded mail is not included; it re-syncs from the server.
+- **Restore**: pick the file from Settings, or tap *Restore from backup* on the sign-in screen of a fresh install. Gmail-API and Outlook sign-in accounts are not included because their tokens can't be reused; add those again.
+- Keep the file outside the app (cloud storage, another device): uninstalling deletes everything inside the app, and a forgotten passphrase can't be recovered.
+
 ### PGP Security
 - **Key Management**: Ed25519/X25519 key generation, ASCII-armored import/export, passphrase-protected keys.
 - **Operations**: Auto-decrypt + signature verification, encrypt & sign on outgoing.
