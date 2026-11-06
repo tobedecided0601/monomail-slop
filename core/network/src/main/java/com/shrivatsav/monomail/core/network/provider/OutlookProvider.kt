@@ -180,21 +180,30 @@ class OutlookProvider(
         if (response.value.isEmpty()) {
             throw IncompleteProviderResponseException("Thread $threadId returned no messages")
         }
+        // Attachment metadata is a separate request per message; run them
+        // concurrently rather than serially (N+1 round trips).
+        val attachmentsByMessage = coroutineScope {
+            response.value.filter { it.hasAttachments == true }.map { msg ->
+                async {
+                    msg.id to try {
+                        api.getAttachments(msg.id).value.map { att ->
+                            EmailAttachmentInfo(
+                                id = att.id,
+                                messageId = msg.id,
+                                name = att.name,
+                                mimeType = att.contentType,
+                                size = 0
+                            )
+                        }
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
+                    } catch (e: Exception) { emptyList() }
+                }
+            }.awaitAll().toMap()
+        }
         val providerMessages = response.value.map { msg ->
             val date = messageDate(msg)
-            val attachments = if (msg.hasAttachments == true) {
-                try {
-                    api.getAttachments(msg.id).value.map { att ->
-                        EmailAttachmentInfo(
-                            id = att.id,
-                            messageId = msg.id,
-                            name = att.name,
-                            mimeType = att.contentType,
-                            size = 0 
-                        )
-                    }
-                } catch (e: Exception) { emptyList() }
-            } else { emptyList() }
+            val attachments = attachmentsByMessage[msg.id].orEmpty()
             ProviderMessage(
                 id = msg.id,
                 threadId = msg.conversationId,
