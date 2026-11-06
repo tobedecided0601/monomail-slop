@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.ContentResolver
 import android.net.Uri
 import android.util.Log
+import androidx.documentfile.provider.DocumentFile
 import com.google.gson.Gson
 import com.shrivatsav.monomail.core.data.auth.AuthManager
 import com.shrivatsav.monomail.core.data.auth.UserProfile
@@ -16,6 +17,7 @@ import com.shrivatsav.monomail.security.SecurityUtil
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 
@@ -112,6 +114,48 @@ class BackupManager(
         return parts.joinToString(", ") + skipped
     }
 
+    /**
+     * Writes a fresh backup to the user's chosen folder as one rolling file
+     * (`monomail-backup.mmbackup`, replaced each time). Records the outcome so the
+     * settings screen can show when it last worked, and why it didn't.
+     */
+    suspend fun runAutoBackup(): Boolean {
+        val state = settingsDataStore.autoBackupFlow.first()
+        val folder = state.folderUri?.let(Uri::parse)
+        val passphrase = SecurityUtil.getAutoBackupPassphrase(context)
+        val failure = when {
+            folder == null -> "No backup folder chosen."
+            passphrase.isNullOrEmpty() -> "No backup passphrase set."
+            else -> try {
+                withContext(Dispatchers.IO) {
+                    val (blob, _) = createBackup(passphrase.toCharArray())
+                    val dir = DocumentFile.fromTreeUri(context, folder)
+                        ?.takeIf { it.canWrite() }
+                        ?: throw BackupException("The backup folder is no longer available. Choose it again.")
+                    val file = dir.findFile(AUTO_BACKUP_FILE)
+                        ?: dir.createFile("application/octet-stream", AUTO_BACKUP_FILE)
+                        ?: throw BackupException("Could not create the backup file in that folder.")
+                    val out = context.contentResolver.openOutputStream(file.uri, "wt")
+                        ?: throw BackupException("Could not write to the backup folder.")
+                    out.use { it.write(blob) }
+                }
+                null
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: BackupException) {
+                e.message
+            } catch (e: Exception) {
+                Log.w(TAG, "Automatic backup failed", e)
+                e.message ?: e.javaClass.simpleName
+            }
+        }
+        settingsDataStore.recordAutoBackupResult(
+            successAt = if (failure == null) System.currentTimeMillis() else null,
+            error = failure
+        )
+        return failure == null
+    }
+
     suspend fun createBackup(passphrase: CharArray): Pair<ByteArray, BackupSummary> {
         val allAccounts = authManager.getAccounts()
         val accounts = allAccounts.filter { it.provider == "imap" }.mapNotNull { account ->
@@ -198,6 +242,7 @@ class BackupManager(
     private companion object {
         const val TAG = "BackupManager"
         const val INITIAL_SYNC_DAYS = 30
+        const val AUTO_BACKUP_FILE = "monomail-backup.mmbackup"
         const val MAX_BACKUP_BYTES = 16 * 1024 * 1024
     }
 }

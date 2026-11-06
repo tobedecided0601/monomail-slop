@@ -31,6 +31,40 @@ class SettingsViewModel @Inject constructor(
     fun restoreBackup(resolver: android.content.ContentResolver, uri: android.net.Uri, passphrase: CharArray) =
         runBackup { backupManager.restoreFrom(resolver, uri, passphrase) }
 
+    val autoBackup: StateFlow<com.shrivatsav.monomail.core.data.settings.AutoBackupState> = settingsDataStore.autoBackupFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), com.shrivatsav.monomail.core.data.settings.AutoBackupState())
+
+    fun setAutoBackupFolder(context: android.content.Context, uri: android.net.Uri) {
+        try {
+            context.contentResolver.takePersistableUriPermission(
+                uri,
+                android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+            )
+        } catch (e: SecurityException) {
+            android.util.Log.w("SettingsViewModel", "Could not persist folder permission", e)
+        }
+        viewModelScope.launch { settingsDataStore.setAutoBackupFolder(uri.toString()) }
+    }
+
+    fun enableAutoBackup(context: android.content.Context, passphrase: CharArray) {
+        com.shrivatsav.monomail.security.SecurityUtil.saveAutoBackupPassphrase(context, String(passphrase))
+        viewModelScope.launch {
+            settingsDataStore.setAutoBackupEnabled(true)
+            com.shrivatsav.monomail.core.data.worker.AutoBackupWorker.schedule(context.applicationContext, true)
+            backupManager.runAutoBackup()
+        }
+    }
+
+    fun disableAutoBackup(context: android.content.Context) {
+        com.shrivatsav.monomail.security.SecurityUtil.clearAutoBackupPassphrase(context)
+        com.shrivatsav.monomail.core.data.worker.AutoBackupWorker.schedule(context.applicationContext, false)
+        viewModelScope.launch { settingsDataStore.setAutoBackupEnabled(false) }
+    }
+
+    fun backupNow() {
+        viewModelScope.launch { backupManager.runAutoBackup() }
+    }
+
     fun clearBackupState() { _backupState.value = com.shrivatsav.monomail.core.data.backup.BackupUiState.Idle }
 
     private fun runBackup(block: suspend () -> String) {

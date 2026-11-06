@@ -7,7 +7,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Backup
 import androidx.compose.material.icons.rounded.FileDownload
+import androidx.compose.material.icons.rounded.Folder
+import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.FileUpload
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
@@ -46,6 +49,27 @@ internal fun BackupSettingsScreen(
     val restorePicker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri -> pendingRestoreUri = uri }
+
+    val auto by viewModel.autoBackup.collectAsState()
+    var askAutoPassphrase by remember { mutableStateOf(false) }
+    val folderPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocumentTree()
+    ) { uri -> if (uri != null) viewModel.setAutoBackupFolder(context, uri) }
+
+    if (askAutoPassphrase) {
+        PassphraseDialog(
+            title = "Automatic backup passphrase",
+            message = "Used to encrypt each automatic backup. It is stored on this device (protected by the " +
+                "Android Keystore) so backups can run without you. Write it down: you need it to restore.",
+            confirmLabel = "Turn on",
+            confirm = true,
+            onSubmit = { passphrase ->
+                askAutoPassphrase = false
+                viewModel.enableAutoBackup(context, passphrase)
+            },
+            onDismiss = { askAutoPassphrase = false }
+        )
+    }
 
     pendingExportUri?.let { uri ->
         PassphraseDialog(
@@ -114,6 +138,47 @@ internal fun BackupSettingsScreen(
                     })
                 )
             }
+            GroupLabel(text = "Automatic backup")
+            SettingsCard {
+                InfoRow(
+                    icon = Icons.Rounded.Folder,
+                    title = "Backup folder",
+                    value = auto.folderUri?.let { folderLabel(it) } ?: "Not chosen",
+                    onClick = { folderPicker.launch(null) }
+                )
+                CardDivider()
+                SettingsToggleRow(
+                    icon = Icons.Rounded.Schedule,
+                    title = "Back up daily",
+                    subtitle = "Keeps one up-to-date file in the folder",
+                    checked = auto.enabled,
+                    onCheckedChange = { wantOn ->
+                        when {
+                            !wantOn -> viewModel.disableAutoBackup(context)
+                            auto.folderUri == null ->
+                                android.widget.Toast.makeText(context, "Choose a backup folder first", android.widget.Toast.LENGTH_SHORT).show()
+                            else -> askAutoPassphrase = true
+                        }
+                    }
+                )
+                if (auto.enabled) {
+                    CardDivider()
+                    InfoRow(
+                        icon = Icons.Rounded.Backup,
+                        title = "Back up now",
+                        value = autoBackupStatus(auto.lastSuccessAt, auto.lastError),
+                        onClick = { viewModel.backupNow() }
+                    )
+                }
+            }
+            auto.lastError?.takeIf { auto.enabled }?.let { error ->
+                Text(
+                    text = "Last automatic backup failed: $error",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(horizontal = 4.dp)
+                )
+            }
             Text(
                 text = "Tip: keep the file somewhere that survives uninstalling, like cloud storage. " +
                     "Uninstalling the app deletes everything stored inside it.",
@@ -133,4 +198,13 @@ private fun ResultDialog(title: String, message: String, onDismiss: () -> Unit) 
         text = { Text(message) },
         confirmButton = { TextButton(onClick = onDismiss) { Text("OK") } }
     )
+}
+
+private fun folderLabel(uri: String): String =
+    Uri.decode(uri).substringAfterLast(':').substringAfterLast('/').ifBlank { "Chosen" }
+
+private fun autoBackupStatus(lastSuccessAt: Long, lastError: String?): String = when {
+    lastSuccessAt > 0L -> "Last: " + SimpleDateFormat("d MMM yyyy, HH:mm", Locale.getDefault()).format(Date(lastSuccessAt))
+    lastError != null -> "Not backed up yet"
+    else -> "Not backed up yet"
 }

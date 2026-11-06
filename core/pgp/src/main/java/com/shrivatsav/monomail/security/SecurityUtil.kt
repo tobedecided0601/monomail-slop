@@ -105,6 +105,18 @@ object SecurityUtil {
         }
     }
 
+    /** Passphrase for unattended automatic backups, kept in Keystore-backed encrypted prefs. */
+    fun saveAutoBackupPassphrase(context: Context, passphrase: String) {
+        getSecurePrefs(context).edit().putString("auto_backup_passphrase", passphrase).apply()
+    }
+
+    fun getAutoBackupPassphrase(context: Context): String? =
+        getSecurePrefs(context).getString("auto_backup_passphrase", null)
+
+    fun clearAutoBackupPassphrase(context: Context) {
+        getSecurePrefs(context).edit().remove("auto_backup_passphrase").apply()
+    }
+
     fun saveCustomGoogleClientId(context: Context, clientId: String) {
         val prefs = getSecurePrefs(context)
         prefs.edit().putString("custom_google_client_id", clientId).apply()

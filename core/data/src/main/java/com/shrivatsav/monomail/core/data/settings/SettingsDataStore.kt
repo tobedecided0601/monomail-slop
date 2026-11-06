@@ -64,6 +64,20 @@ data class DockConfig(
         fun defaults() = DockConfig()
     }
 }
+/** A search the user pinned for one-tap reuse. [searchField] is a SearchField enum name. */
+data class SavedSearch(
+    val name: String,
+    val query: String,
+    val searchField: String = "ALL",
+    val hasAttachments: Boolean = false
+)
+/** Automatic backup configuration. The folder is a persisted SAF tree URI. */
+data class AutoBackupState(
+    val enabled: Boolean = false,
+    val folderUri: String? = null,
+    val lastSuccessAt: Long = 0L,
+    val lastError: String? = null
+)
 data class EmailTemplate(
     val name: String,
     val subject: String,
@@ -140,6 +154,11 @@ class SettingsDataStore(private val context: Context) {
         val UNDO_SEND_ENABLED = booleanPreferencesKey("undo_send_enabled")
         val UNDO_SEND_WINDOW = stringPreferencesKey("undo_send_window")
         val TEMPLATES = stringPreferencesKey("email_templates")
+        val SAVED_SEARCHES = stringPreferencesKey("saved_searches")
+        val AUTO_BACKUP_ENABLED = booleanPreferencesKey("auto_backup_enabled")
+        val AUTO_BACKUP_FOLDER = stringPreferencesKey("auto_backup_folder")
+        val AUTO_BACKUP_LAST_SUCCESS = longPreferencesKey("auto_backup_last_success")
+        val AUTO_BACKUP_LAST_ERROR = stringPreferencesKey("auto_backup_last_error")
         val DOCK_CONFIG = stringPreferencesKey("dock_config")
         val IS_DEVELOPER_MODE = booleanPreferencesKey("is_developer_mode")
         val SHOW_INLINE_ATTACHMENTS = booleanPreferencesKey("show_inline_attachments")
@@ -256,7 +275,8 @@ class SettingsDataStore(private val context: Context) {
                 is Set<*> -> BackupPref("set", values = value.filterIsInstance<String>())
                 else -> null
             }
-            if (pref != null) out[key.name] = pref
+            // Device-specific (folder grants, backup status): meaningless on another install.
+            if (pref != null && !key.name.startsWith("auto_backup_")) out[key.name] = pref
         }
         return out
     }
@@ -266,6 +286,7 @@ class SettingsDataStore(private val context: Context) {
         var applied = 0
         context.dataStore.edit { prefs ->
             for ((name, pref) in values) {
+                if (name.startsWith("auto_backup_")) continue
                 try {
                     when (pref.type) {
                         "bool" -> prefs[booleanPreferencesKey(name)] = pref.value!!.toBooleanStrict()
@@ -425,5 +446,36 @@ class SettingsDataStore(private val context: Context) {
             val type = object : TypeToken<Array<EmailTemplate>>() {}.type
             gson.fromJson<Array<EmailTemplate>>(json, type).toList()
         } catch (e: Exception) { emptyList() }
+    }
+    val savedSearchesFlow: Flow<List<SavedSearch>> = context.dataStore.data.map { prefs ->
+        val json = prefs[Keys.SAVED_SEARCHES] ?: return@map emptyList()
+        try {
+            gson.fromJson(json, Array<SavedSearch>::class.java).toList()
+        } catch (e: Exception) { emptyList() }
+    }
+    suspend fun saveSavedSearches(searches: List<SavedSearch>) {
+        context.dataStore.edit { prefs -> prefs[Keys.SAVED_SEARCHES] = gson.toJson(searches) }
+    }
+    val autoBackupFlow: Flow<AutoBackupState> = context.dataStore.data.map { prefs ->
+        AutoBackupState(
+            enabled = prefs[Keys.AUTO_BACKUP_ENABLED] ?: false,
+            folderUri = prefs[Keys.AUTO_BACKUP_FOLDER],
+            lastSuccessAt = prefs[Keys.AUTO_BACKUP_LAST_SUCCESS] ?: 0L,
+            lastError = prefs[Keys.AUTO_BACKUP_LAST_ERROR]
+        )
+    }
+    suspend fun setAutoBackupEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.AUTO_BACKUP_ENABLED] = enabled }
+    }
+    suspend fun setAutoBackupFolder(uri: String?) {
+        context.dataStore.edit { prefs ->
+            if (uri == null) prefs.remove(Keys.AUTO_BACKUP_FOLDER) else prefs[Keys.AUTO_BACKUP_FOLDER] = uri
+        }
+    }
+    suspend fun recordAutoBackupResult(successAt: Long?, error: String?) {
+        context.dataStore.edit { prefs ->
+            if (successAt != null) prefs[Keys.AUTO_BACKUP_LAST_SUCCESS] = successAt
+            if (error == null) prefs.remove(Keys.AUTO_BACKUP_LAST_ERROR) else prefs[Keys.AUTO_BACKUP_LAST_ERROR] = error
+        }
     }
 }

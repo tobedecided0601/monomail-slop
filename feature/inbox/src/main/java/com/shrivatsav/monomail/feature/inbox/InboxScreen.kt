@@ -255,6 +255,16 @@ fun InboxScreen(
                         visible = isSearchActive
                     )
 
+                    val savedSearches by viewModel.savedSearches.collectAsState()
+                    SavedSearchesRow(
+                        saved = savedSearches,
+                        currentFilters = searchFilters,
+                        visible = isSearchActive || isSearchFocused,
+                        onApply = viewModel::applySavedSearch,
+                        onSave = viewModel::saveCurrentSearch,
+                        onDelete = viewModel::deleteSavedSearch
+                    )
+
                     val isOnline = rememberConnectivityState()
                     AnimatedVisibility(
                         visible = !isOnline,
