@@ -188,13 +188,6 @@ androidComponents {
     }
     val isDevBuild = localProps.getProperty("devBuild") == "true"
     
-    // Debug builds of the GitHub flavor install next to the real app as
-    // "com.shrivatsav.monomail.debug", so a CI-built APK never clashes with
-    // (or needs to be signed like) an installed release build.
-    onVariants(selector().withBuildType("debug").withFlavor("distribution" to "github")) { variant ->
-        variant.applicationId.set(variant.applicationId.map { "$it.debug" })
-    }
-
     beforeVariants(selector().withBuildType("release")) { variantBuilder ->
         if (isDevBuild) {
             variantBuilder.enable = false
