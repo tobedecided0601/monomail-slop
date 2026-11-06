@@ -52,6 +52,7 @@ dependencies {
     implementation(project(":core:pgp"))
 
     implementation(libs.androidx.core.ktx)
+    implementation("androidx.documentfile:documentfile:1.0.1")
     
     // DataStore
     implementation(libs.androidx.datastore.preferences)

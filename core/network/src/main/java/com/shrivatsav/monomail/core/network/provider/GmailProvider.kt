@@ -163,9 +163,17 @@ class GmailProvider(
             if (e.code() in setOf(404, 410)) throw ResourceNotFoundException("Thread $threadId not found", e)
             throw e
         }
-        val messages = rawThread.messages.orEmpty().map { msg ->
-            val email = msg.toEmail()
-            val externalBody = if (email.body.isBlank()) fetchExternalTextBody(msg) else null
+        // Large bodies come back as separate attachment requests; fetch them
+        // concurrently instead of one message at a time.
+        val messages = coroutineScope {
+            rawThread.messages.orEmpty().map { msg ->
+                async {
+                    val email = msg.toEmail()
+                    val externalBody = if (email.body.isBlank()) fetchExternalTextBody(msg) else null
+                    email to externalBody
+                }
+            }.awaitAll()
+        }.map { (email, externalBody) ->
             ProviderMessage(
                 id = email.id, threadId = email.threadId, subject = email.subject,
                 from = email.from, fromEmail = email.fromEmail, to = email.`to`,

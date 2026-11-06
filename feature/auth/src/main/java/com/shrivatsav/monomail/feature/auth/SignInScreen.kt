@@ -160,11 +160,55 @@ fun SignInScreen(
         VerificationModal(onDismiss = { showVerificationModal = false })
     }
 
+    val restoreState by viewModel.restoreState.collectAsState()
+    var pendingRestoreUri by remember { mutableStateOf<android.net.Uri?>(null) }
+    val restorePicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri -> pendingRestoreUri = uri }
+
+    pendingRestoreUri?.let { uri ->
+        com.shrivatsav.monomail.ui.components.PassphraseDialog(
+            title = "Unlock backup",
+            message = "Enter the passphrase you chose when you created this backup.",
+            confirmLabel = "Restore",
+            confirm = false,
+            onSubmit = { passphrase ->
+                pendingRestoreUri = null
+                viewModel.restoreBackup(uri, passphrase)
+            },
+            onDismiss = { pendingRestoreUri = null }
+        )
+    }
+    when (val restore = restoreState) {
+        is com.shrivatsav.monomail.core.data.backup.BackupUiState.Working -> AlertDialog(
+            onDismissRequest = {},
+            title = { Text("Restoring…") },
+            text = { Text("Checking your backup and adding your accounts.") },
+            confirmButton = {}
+        )
+        is com.shrivatsav.monomail.core.data.backup.BackupUiState.Done -> AlertDialog(
+            onDismissRequest = {},
+            title = { Text("Backup restored") },
+            text = { Text(restore.message) },
+            confirmButton = {
+                TextButton(onClick = { viewModel.clearRestoreState(); onSignInSuccess() }) { Text("Continue") }
+            }
+        )
+        is com.shrivatsav.monomail.core.data.backup.BackupUiState.Failed -> AlertDialog(
+            onDismissRequest = { viewModel.clearRestoreState() },
+            title = { Text("Couldn't restore") },
+            text = { Text(restore.message) },
+            confirmButton = { TextButton(onClick = { viewModel.clearRestoreState() }) { Text("OK") } }
+        )
+        else -> Unit
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
         SignInContent(
             scale = scale.value,
             alpha = alpha.value,
             onContinueWithEmail = { showProviderSheet = true },
+            onRestoreBackup = { restorePicker.launch(arrayOf("*/*")) },
             onNavigateToLegal = onNavigateToLegal,
             context = context,
         )
@@ -233,6 +277,7 @@ private fun SignInContent(
     scale: Float,
     alpha: Float,
     onContinueWithEmail: () -> Unit,
+    onRestoreBackup: () -> Unit,
     onNavigateToLegal: (String) -> Unit,
     context: Context,
 ) {
@@ -285,7 +330,14 @@ private fun SignInContent(
                     style = MaterialTheme.typography.labelLarge,
                 )
             }
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(8.dp))
+            TextButton(onClick = onRestoreBackup, modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = "Restore from backup",
+                    style = MaterialTheme.typography.labelLarge,
+                )
+            }
+            Spacer(modifier = Modifier.height(16.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.Center,

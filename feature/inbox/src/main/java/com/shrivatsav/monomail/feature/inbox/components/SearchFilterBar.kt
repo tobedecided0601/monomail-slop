@@ -1,5 +1,6 @@
 package com.shrivatsav.monomail.feature.inbox.components
 
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -27,7 +28,9 @@ import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -50,6 +53,13 @@ internal fun SearchFilterBar(
     modifier: Modifier = Modifier
 ) {
     var expanded by remember { mutableStateOf(false) }
+    // Filters other than the query text; shown in the collapsed header so an
+    // active filter is never hidden behind a closed panel.
+    val activeFilterCount = listOf(
+        filters.searchField != SearchField.ALL,
+        filters.dateFrom != null || filters.dateTo != null,
+        filters.hasAttachments
+    ).count { it }
     AnimatedVisibility(
         visible = visible,
         enter = expandVertically() + fadeIn(),
@@ -69,11 +79,17 @@ internal fun SearchFilterBar(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Search filters",
+                    text = if (activeFilterCount > 0) "Search filters · $activeFilterCount active" else "Search filters",
                     style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontWeight = if (activeFilterCount > 0) FontWeight.SemiBold else FontWeight.Normal,
+                    color = if (activeFilterCount > 0) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.weight(1f)
                 )
+                if (activeFilterCount > 0) {
+                    TextButton(onClick = { onFiltersChanged(filters.copy(searchField = SearchField.ALL, dateFrom = null, dateTo = null, hasAttachments = false)) }) {
+                        Text("Clear")
+                    }
+                }
                 Icon(
                     imageVector = if (expanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
                     contentDescription = if (expanded) "Collapse filters" else "Expand filters"
@@ -82,13 +98,13 @@ internal fun SearchFilterBar(
             AnimatedVisibility(visible = expanded) {
             Column {
             Text(
-                text = "Search operators",
+                text = "Add to search",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 8.dp, bottom = 6.dp)
             )
             Text(
-                text = "Tap an operator to add it to your search.",
+                text = "Tap to insert into the search box.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(bottom = 6.dp)
@@ -112,19 +128,21 @@ internal fun SearchFilterBar(
                     "in:inbox" to "Inbox",
                     "after:" to "After date",
                     "before:" to "Before date",
-                    "-term" to "Exclude"
+                    "-" to "Exclude word"
                 ).forEach { (operator, label) ->
-                    FilterChip(
-                        selected = false,
+                    // Operators are shortcuts, not toggles, so use plain suggestion
+                    // chips (never "selected") and show the exact text inserted.
+                    SuggestionChip(
                         onClick = {
                             val separator = if (filters.query.isBlank() || filters.query.endsWith(" ")) "" else " "
                             onQueryChanged(filters.query + separator + operator)
                         },
-                        label = { Text(label) }
+                        label = { Text(if (operator == "-") label else "$label  $operator") }
                     )
                 }
             }
             // Field scope chips
+            Spacer(Modifier.height(12.dp))
             Text(
                 text = "Search in",
                 style = MaterialTheme.typography.labelMedium,

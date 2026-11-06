@@ -203,11 +203,9 @@ private fun SearchInputContent(
         interactionSource = interactionSource,
         placeholder = {
             Text(
-                if (display.isRefreshing) {
-                    "Syncing..."
-                } else {
-                    "Search..."
-                },
+                // The spinner in the leading slot already signals syncing; the
+                // field should keep telling people what it is for.
+                "Search mail",
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
             )

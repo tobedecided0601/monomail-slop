@@ -143,7 +143,7 @@ internal fun NotificationSettingsScreen(
                                 try {
                                     context.startActivity(intent)
                                 } catch (e: Exception) {
-                                    e.printStackTrace()
+                                    android.util.Log.w("NotificationSettings", "Could not open channel settings", e)
                                 }
                             }
                         )

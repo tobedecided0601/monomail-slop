@@ -31,8 +31,35 @@ sealed class SignInState {
 class SignInViewModel @Inject constructor(
     application: Application,
     private val authManager: AuthManager,
-    private val emailRepository: EmailRepository
+    private val emailRepository: EmailRepository,
+    private val backupManager: com.shrivatsav.monomail.core.data.backup.BackupManager
 ) : AndroidViewModel(application) {
+
+    private val _restoreState = MutableStateFlow<com.shrivatsav.monomail.core.data.backup.BackupUiState>(
+        com.shrivatsav.monomail.core.data.backup.BackupUiState.Idle
+    )
+    val restoreState: StateFlow<com.shrivatsav.monomail.core.data.backup.BackupUiState> = _restoreState.asStateFlow()
+
+    fun clearRestoreState() { _restoreState.value = com.shrivatsav.monomail.core.data.backup.BackupUiState.Idle }
+
+    /** Restores a backup file on a fresh install; the caller moves on to the inbox when it succeeds. */
+    fun restoreBackup(uri: android.net.Uri, passphrase: CharArray) {
+        if (_restoreState.value is com.shrivatsav.monomail.core.data.backup.BackupUiState.Working) return
+        _restoreState.value = com.shrivatsav.monomail.core.data.backup.BackupUiState.Working
+        viewModelScope.launch {
+            _restoreState.value = try {
+                val message = backupManager.restoreFrom(getApplication<Application>().contentResolver, uri, passphrase)
+                com.shrivatsav.monomail.core.data.backup.BackupUiState.Done(message)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: com.shrivatsav.monomail.core.data.backup.BackupException) {
+                com.shrivatsav.monomail.core.data.backup.BackupUiState.Failed(e.message ?: "Restore failed.")
+            } catch (e: Exception) {
+                android.util.Log.w("SignInViewModel", "Restore failed", e)
+                com.shrivatsav.monomail.core.data.backup.BackupUiState.Failed("Something went wrong: ${e.message ?: e.javaClass.simpleName}")
+            }
+        }
+    }
 
     private val _state = MutableStateFlow<SignInState>(SignInState.Idle)
     val state: StateFlow<SignInState> = _state.asStateFlow()

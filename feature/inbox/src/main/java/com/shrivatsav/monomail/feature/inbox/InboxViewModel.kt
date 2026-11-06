@@ -15,6 +15,8 @@ import com.shrivatsav.monomail.core.data.repository.BodyDownloadStats
 import com.shrivatsav.monomail.core.data.settings.AppSettings
 import com.shrivatsav.monomail.core.data.settings.SyncFrequency
 import com.shrivatsav.monomail.core.data.settings.SettingsDataStore
+import com.shrivatsav.monomail.core.data.settings.SavedSearch
+import com.shrivatsav.monomail.core.data.repository.SearchField
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.getValue
@@ -495,6 +497,37 @@ class InboxViewModel @Inject constructor(
             _searchResults.value = results
         }
     }
+    val savedSearches: StateFlow<List<SavedSearch>> = settingsDataStore.savedSearchesFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun saveCurrentSearch() {
+        val filters = _searchFilters.value
+        val query = filters.query.trim()
+        if (query.isEmpty()) return
+        val entry = SavedSearch(
+            name = query.take(40),
+            query = query,
+            searchField = filters.searchField.name,
+            hasAttachments = filters.hasAttachments
+        )
+        viewModelScope.launch {
+            val current = savedSearches.value
+            if (current.any { it.sameSearchAs(entry) }) return@launch
+            settingsDataStore.saveSavedSearches((listOf(entry) + current).take(MAX_SAVED_SEARCHES))
+        }
+    }
+
+    fun deleteSavedSearch(search: SavedSearch) {
+        viewModelScope.launch {
+            settingsDataStore.saveSavedSearches(savedSearches.value.filterNot { it == search })
+        }
+    }
+
+    fun applySavedSearch(search: SavedSearch) {
+        val field = runCatching { SearchField.valueOf(search.searchField) }.getOrDefault(SearchField.ALL)
+        updateSearch(SearchFilters(query = search.query, searchField = field, hasAttachments = search.hasAttachments))
+    }
+
     fun clearSearch() {
         _searchFilters.value = SearchFilters()
         _searchResults.value = emptyList()
@@ -860,3 +893,8 @@ class InboxViewModel @Inject constructor(
         exitBulkSelectMode()
     }
 }
+
+private const val MAX_SAVED_SEARCHES = 20
+
+internal fun SavedSearch.sameSearchAs(other: SavedSearch): Boolean =
+    query.equals(other.query, ignoreCase = true) && searchField == other.searchField && hasAttachments == other.hasAttachments

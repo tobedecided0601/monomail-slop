@@ -39,6 +39,7 @@ enum class SettingsSection(val icon: ImageVector, val title: String, val subtitl
     COMPOSE(Icons.AutoMirrored.Rounded.Send, "Compose", "Reply defaults, confirm send, undo send"),
     NAVIGATION(Icons.Rounded.Explore, "Navigation", "Gestures & actions"),
     NOTIFICATIONS(Icons.Rounded.Notifications, "Notifications", "Alerts & sync"),
+    BACKUP(Icons.Rounded.Backup, "Backup & restore", "Save accounts and settings to a file"),
     DEVELOPER(Icons.Rounded.DeveloperMode, "Developer", "Developer mode & debug tools"),
     LOGS(Icons.Rounded.Terminal, "Logs", "View IMAP and rendering diagnostics"),
     SUPPORT(Icons.Rounded.Favorite, "Support", "Donate & community")
@@ -97,6 +98,10 @@ fun SettingsScreen(
             SettingsSection.LOGS -> LogsSettingsScreen(onBack = { currentSection = null })
             SettingsSection.NOTIFICATIONS -> NotificationSettingsScreen(
                 authManager = authManager,
+                viewModel = viewModel,
+                onBack = { currentSection = null }
+            )
+            SettingsSection.BACKUP -> BackupSettingsScreen(
                 viewModel = viewModel,
                 onBack = { currentSection = null }
             )
