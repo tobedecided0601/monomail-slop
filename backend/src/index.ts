@@ -293,16 +293,18 @@ async function handleOutlookWebhook(request: Request, env: Env, ctx: ExecutionCo
     throw new HttpError(400, 'Invalid Outlook notification');
   }
 
-  const identities = new Map<string, IdentityRecord>();
-  for (const value of body.value) {
-    if (!isRecord(value) || !validOpaqueId(value.subscriptionId, 256) || !validOpaqueId(value.clientState, 256)) continue;
+  const notifications = body.value.filter((value): value is Record<string, unknown> & { subscriptionId: string; clientState: string } =>
+    isRecord(value) && validOpaqueId(value.subscriptionId, 256) && validOpaqueId(value.clientState, 256));
+  const resolved = await Promise.all(notifications.map(async (value) => {
     const metadata = await getSubscription(env.FCM_TOKENS, value.subscriptionId);
-    if (!metadata || metadata.clientState !== value.clientState || metadata.expiresAt <= Date.now()) continue;
+    if (!metadata || metadata.clientState !== value.clientState || metadata.expiresAt <= Date.now()) return null;
     const identity = await getIdentity(env.FCM_TOKENS, metadata.identityId);
-    if (!identity || identity.provider !== 'outlook' || identity.outlookSubscriptionId !== metadata.subscriptionId) continue;
-    identities.set(identity.identityId, identity);
-  }
-  for (const identity of identities.values()) await dispatchPush(env, ctx, identity);
+    if (!identity || identity.provider !== 'outlook' || identity.outlookSubscriptionId !== metadata.subscriptionId) return null;
+    return identity;
+  }));
+  const identities = new Map<string, IdentityRecord>();
+  for (const identity of resolved) if (identity) identities.set(identity.identityId, identity);
+  await Promise.all([...identities.values()].map((identity) => dispatchPush(env, ctx, identity)));
   return new Response('Accepted', { status: 202 });
 }
 
