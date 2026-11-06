@@ -946,21 +946,15 @@ class ImapProvider(
      * HeaderTerm values, then use [messageIdsMatch] for the final decision.
      */
     private fun messageIdSearchTerm(header: String, value: String): SearchTerm {
-        val terms = messageIdVariants(value).map { jakarta.mail.search.HeaderTerm(header, it) }
-        var combined: SearchTerm = terms.first()
-        for (term in terms.drop(1)) {
-            combined = jakarta.mail.search.OrTerm(combined, term)
-        }
-        return combined
+        // IMAP HEADER search is a case-insensitive substring match, so the bare
+        // id (no angle brackets) matches both the "<id>" and "id" forms. One
+        // term instead of three OR'd variants keeps the server-side scan of
+        // large folders as cheap as possible.
+        return jakarta.mail.search.HeaderTerm(header, messageIdSearchValue(value))
     }
 
-    private fun messageIdVariants(value: String): List<String> {
-        val trimmed = value.trim()
-        val normalized = normalizeMessageId(trimmed)
-        return listOf(trimmed, "<$normalized>", normalized)
-            .filter { it.isNotBlank() }
-            .distinct()
-    }
+    private fun messageIdSearchValue(value: String): String =
+        value.trim().removePrefix("<").removeSuffix(">").trim()
 
     private fun messageIdsMatch(first: String?, second: String?): Boolean {
         return first != null && second != null &&

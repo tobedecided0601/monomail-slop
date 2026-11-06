@@ -79,7 +79,9 @@ class ImapConnectionPool(
                 }
                 if (connectionFailure && attempt < STORE_RECONNECT_ATTEMPTS) {
                     attempt++
-                    val delayMs = STORE_RECONNECT_BASE_DELAY_MS * attempt
+                    // An interactive request retries a dropped connection at
+                    // once; only repeated failures back off.
+                    val delayMs = if (priority && attempt == 1) 0L else STORE_RECONNECT_BASE_DELAY_MS * attempt
                     Log.w(tag, "Store disconnected, retrying in ${delayMs}ms (attempt $attempt/$STORE_RECONNECT_ATTEMPTS)")
                     delay(delayMs)
                     continue
@@ -125,7 +127,12 @@ class ImapConnectionPool(
      */
     private suspend fun leaseStore(priority: Boolean): Store {
         while (true) {
-            idleStores.tryReceive().getOrNull()?.let { return it }
+            val idle = idleStores.tryReceive().getOrNull()
+            if (idle != null) {
+                if (isUsable(idle)) return idle
+                dropStore(idle)
+                continue
+            }
             val created = createdCount.get()
             // Keep one connection available for an interactive detail request.
             // Backfill and sync work cannot consume the reserved slot.
@@ -140,9 +147,25 @@ class ImapConnectionPool(
             }
             // Pool saturated — wait for a store to be returned
             val store = idleStores.receiveCatching().getOrNull()
-            if (store != null) return store
+            if (store != null) {
+                if (isUsable(store)) return store
+                dropStore(store)
+                continue
+            }
             throw IllegalStateException("IMAP connection pool closed")
         }
+    }
+
+    /**
+     * Idle connections are often closed by the server (Yahoo and Gmail both
+     * drop idle sessions). [Store.isConnected] issues a NOOP, so a dead
+     * connection is detected here in one round trip instead of failing the
+     * user's request with a read timeout and then backing off before retrying.
+     */
+    private fun isUsable(store: Store): Boolean = try {
+        store.isConnected
+    } catch (e: Exception) {
+        false
     }
 
     /**
