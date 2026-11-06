@@ -111,6 +111,7 @@ const DEFAULT_INSTALLATION_TTL = 30 * 24 * 60 * 60;
 const MAX_BODY_BYTES = 16 * 1024;
 const GRAPH_SUBSCRIPTION_LIFETIME_MS = 60 * 60 * 1000 * 60;
 const GOOGLE_JWKS_URL = 'https://www.googleapis.com/oauth2/v3/certs';
+const oauthTokenCache = new Map<string, { token: string; expiresAt: number }>();
 let googleJwksCache: { expiresAt: number; value: GoogleJwkSet } | undefined;
 
 const worker = {
@@ -157,13 +158,9 @@ export default worker;
 async function handleRegister(request: Request, env: Env): Promise<Response> {
   const body = parseRegisterRequest(await readJson(request));
   const accessToken = bearerToken(request);
+  await enforceRateLimit(request, env, 'register');
   const identity = await verifyProviderIdentity(body.provider, accessToken);
   assertRequestedIdentity(body.email, identity);
-
-  const clientIp = request.headers.get('CF-Connecting-IP') ?? 'unknown';
-  if (!(await checkRateLimit(env.FCM_TOKENS, `register:${clientIp}`, 20, 60))) {
-    throw new HttpError(429, 'Rate limit exceeded');
-  }
 
   const ttl = installationTtl(env);
   const now = Date.now();
@@ -217,6 +214,7 @@ async function handleRegister(request: Request, env: Env): Promise<Response> {
 async function handleUnregister(request: Request, env: Env): Promise<Response> {
   const body = parseUnregisterRequest(await readJson(request));
   const accessToken = bearerToken(request);
+  await enforceRateLimit(request, env, 'unregister');
   const identity = await verifyProviderIdentity(body.provider, accessToken);
   assertRequestedIdentity(body.email, identity);
   const identityId = await sha256(`${identity.provider}:${identity.subject}`);
@@ -566,6 +564,8 @@ async function getGoogleJwks(): Promise<GoogleJwkSet> {
 }
 
 async function getGoogleOAuthAccessToken(serviceAccount: ServiceAccount): Promise<string> {
+  const cached = oauthTokenCache.get(serviceAccount.client_email);
+  if (cached && cached.expiresAt > Date.now()) return cached.token;
   const now = Math.floor(Date.now() / 1000);
   const signingInput = `${base64UrlEncode(JSON.stringify({ alg: 'RS256', typ: 'JWT' }))}.${base64UrlEncode(JSON.stringify({
     iss: serviceAccount.client_email,
@@ -590,6 +590,11 @@ async function getGoogleOAuthAccessToken(serviceAccount: ServiceAccount): Promis
   if (!isRecord(value) || typeof value.access_token !== 'string' || value.access_token.length < 20) {
     throw new Error('Google OAuth token exchange returned an invalid token');
   }
+  const lifetimeSec = typeof value.expires_in === 'number' && value.expires_in > 0 ? value.expires_in : 3600;
+  oauthTokenCache.set(serviceAccount.client_email, {
+    token: value.access_token,
+    expiresAt: Date.now() + Math.max(0, lifetimeSec - 120) * 1000
+  });
   return value.access_token;
 }
 
@@ -630,6 +635,13 @@ function bearerToken(request: Request): string {
   const match = /^Bearer ([!-~]{20,8192})$/.exec(header);
   if (!match) throw new HttpError(401, 'Bearer authentication required');
   return match[1];
+}
+
+async function enforceRateLimit(request: Request, env: Env, scope: string): Promise<void> {
+  const clientIp = request.headers.get('CF-Connecting-IP') ?? 'unknown';
+  if (!(await checkRateLimit(env.FCM_TOKENS, `${scope}:${clientIp}`, 20, 60))) {
+    throw new HttpError(429, 'Rate limit exceeded');
+  }
 }
 
 async function checkRateLimit(kv: KVNamespace, key: string, limit: number, windowSec: number): Promise<boolean> {

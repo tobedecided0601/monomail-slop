@@ -309,8 +309,10 @@ test('synchronous FCM failures are retriable and invalid tokens are removed', as
   }));
   const testEnv = { ...env(kv), GCP_SERVICE_ACCOUNT_KEY: serviceAccount };
   let fcmStatus = 500;
+  let oauthExchanges = 0;
   globalThis.fetch = async (input) => {
     const url = String(input);
+    if (url === 'https://oauth2.googleapis.com/token') oauthExchanges++;
     if (url === 'https://oauth2.googleapis.com/token') return Response.json({ access_token: 'firebase-oauth-access-token-value' });
     if (url.includes('fcm.googleapis.com')) {
       if (fcmStatus === 404) {
@@ -330,4 +332,24 @@ test('synchronous FCM failures are retriable and invalid tokens are removed', as
   const invalid = await worker.fetch(jsonRequest('/webhook/outlook', notification), testEnv, context);
   assert.equal(invalid.status, 202);
   assert.equal(kv.values.has(`installation:${identityId}:fcm_failure_device`), false);
+  assert.equal(oauthExchanges, 1, 'OAuth access token is cached across FCM sends');
+});
+
+test('rate limit is enforced before upstream identity verification', async () => {
+  const testEnv = env();
+  let upstreamCalls = 0;
+  globalThis.fetch = async () => { upstreamCalls++; return new Response('unauthorized', { status: 401 }); };
+  const send = (path) => worker.fetch(
+    jsonRequest(path, path === '/register' ? registration('rate_limit_device_001') : {
+      accountId: 'gmail_owner@example.com', email: 'owner@example.com',
+      installationId: 'rate_limit_device_001', provider: 'gmail'
+    }, 'google-access-token-rate'),
+    testEnv, context
+  );
+  for (const path of ['/register', '/unregister']) {
+    upstreamCalls = 0;
+    for (let i = 0; i < 20; i++) assert.equal((await send(path)).status, 401);
+    assert.equal((await send(path)).status, 429);
+    assert.equal(upstreamCalls, 20);
+  }
 });
