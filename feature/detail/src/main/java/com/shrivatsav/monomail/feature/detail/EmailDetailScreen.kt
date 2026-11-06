@@ -62,6 +62,7 @@ import androidx.compose.material.icons.automirrored.rounded.Forward
 import androidx.compose.material.icons.automirrored.rounded.Reply
 import androidx.compose.material.icons.rounded.AttachFile
 import androidx.compose.material.icons.rounded.ExpandLess
+import androidx.compose.material.icons.rounded.MarkEmailUnread
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.StarBorder
@@ -217,15 +218,18 @@ fun EmailDetailScreen(
                             onDismissRequest = { showMenu = false }
                         ) {
                             androidx.compose.material3.DropdownMenuItem(
-                                text = { Text("Mark Unread") },
+                                text = { Text("Mark as unread") },
+                                leadingIcon = { Icon(Icons.Rounded.MarkEmailUnread, null) },
                                 onClick = { showMenu = false; viewModel.markUnread(onComplete = { onBack() }) }
                             )
                             androidx.compose.material3.DropdownMenuItem(
                                 text = { Text("Archive") },
+                                leadingIcon = { Icon(Icons.Rounded.Archive, null) },
                                 onClick = { showMenu = false; viewModel.archiveThread(onComplete = { onBack() }) }
                             )
                             androidx.compose.material3.DropdownMenuItem(
-                                text = { Text("Move to Trash") },
+                                text = { Text("Move to trash") },
+                                leadingIcon = { Icon(Icons.Rounded.Delete, null) },
                                 onClick = { showMenu = false; viewModel.trashThread(onComplete = { onBack() }) }
                             )
                         }
@@ -549,7 +553,7 @@ fun ThreadConversationContent(
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Rounded.Reply,
-                            contentDescription = "Reply",
+                            contentDescription = null,
                             modifier = Modifier.size(20.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
@@ -568,7 +572,7 @@ fun ThreadConversationContent(
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Rounded.Forward,
-                            contentDescription = "Forward",
+                            contentDescription = null,
                             modifier = Modifier.size(20.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
@@ -638,12 +642,12 @@ private fun ConversationEmailItem(
                     Icon(
                         imageVector = if (isExpanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
                         contentDescription = if (isExpanded) "Collapse" else "Expand",
-                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
+                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Box {
-                        IconButton(onClick = { showMenu = true }, modifier = Modifier.size(24.dp)) {
+                        IconButton(onClick = { showMenu = true }, modifier = Modifier.size(40.dp)) {
                             Icon(
                                 imageVector = Icons.Rounded.MoreVert,
                                 contentDescription = "Message options",
@@ -667,7 +671,7 @@ private fun ConversationEmailItem(
                                 leadingIcon = { Icon(Icons.Rounded.Archive, null) }
                             )
                             DropdownMenuItem(
-                                text = { Text("Delete") },
+                                text = { Text("Move to trash") },
                                 onClick = { showMenu = false; onDelete() },
                                 leadingIcon = { Icon(Icons.Rounded.Delete, null) }
                             )

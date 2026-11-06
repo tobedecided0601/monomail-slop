@@ -12,6 +12,7 @@ import com.shrivatsav.monomail.ui.theme.cornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -20,6 +21,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.shrivatsav.monomail.core.data.auth.UserProfile
 
@@ -137,7 +140,8 @@ private fun AccountRow(
                 if (isCurrent) MaterialTheme.colorScheme.onBackground.copy(alpha = 0.06f)
                 else Color.Transparent
             )
-            .clickable { if (!isCurrent) onClick() }
+            .clickable(role = androidx.compose.ui.semantics.Role.RadioButton) { if (!isCurrent) onClick() }
+            .semantics { selected = isCurrent }
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -165,10 +169,11 @@ private fun AccountRow(
             )
         }
         if (isCurrent) {
-            Box(
-                modifier = Modifier
-                    .size(8.dp)
-                    .background(MaterialTheme.colorScheme.onBackground, CircleShape)
+            Icon(
+                Icons.Rounded.Check,
+                contentDescription = "Current account",
+                tint = MaterialTheme.colorScheme.onBackground,
+                modifier = Modifier.size(20.dp)
             )
         }
     }

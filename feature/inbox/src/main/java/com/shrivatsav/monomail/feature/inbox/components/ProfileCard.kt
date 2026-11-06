@@ -291,6 +291,20 @@ private fun UnifiedInboxToggle(unifiedInboxEnabled: Boolean, callbacks: ProfileC
 
 @Composable
 private fun ProfileCardButtons(callbacks: ProfileCardCallbacks) {
+    var confirmSignOut by remember { mutableStateOf(false) }
+    if (confirmSignOut) {
+        AlertDialog(
+            onDismissRequest = { confirmSignOut = false },
+            title = { Text("Sign out?") },
+            text = { Text("You will need to sign in again to use this account.") },
+            confirmButton = {
+                TextButton(onClick = { confirmSignOut = false; callbacks.onSignOut() }) { Text("Sign out") }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmSignOut = false }) { Text("Cancel") }
+            }
+        )
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -298,7 +312,7 @@ private fun ProfileCardButtons(callbacks: ProfileCardCallbacks) {
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         OutlinedButton(
-            onClick = callbacks.onSignOut,
+            onClick = { confirmSignOut = true },
             modifier = Modifier.weight(1f),
             shape = cornerShape(14.dp),
             colors = ButtonDefaults.outlinedButtonColors(
