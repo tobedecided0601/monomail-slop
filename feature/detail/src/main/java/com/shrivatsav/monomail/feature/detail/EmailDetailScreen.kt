@@ -65,6 +65,7 @@ import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.MarkEmailUnread
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Image
+import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.StarBorder
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Lock
@@ -599,6 +600,8 @@ private fun ConversationEmailItem(
     onDelete: () -> Unit
 ) {
     var showMenu by remember { mutableStateOf(false) }
+    var showDetails by remember { mutableStateOf(false) }
+    if (showDetails) MessageDetailsSheet(email, config.use24HourTime) { showDetails = false }
     Column {
         Row(
             modifier = Modifier
@@ -660,6 +663,11 @@ private fun ConversationEmailItem(
                             onDismissRequest = { showMenu = false },
                             shape = MaterialTheme.shapes.extraSmall
                         ) {
+                            DropdownMenuItem(
+                                text = { Text("Message details") },
+                                onClick = { showMenu = false; showDetails = true },
+                                leadingIcon = { Icon(Icons.Rounded.Info, null) }
+                            )
                             DropdownMenuItem(
                                 text = { Text(if (email.isStarred) "Unstar" else "Star") },
                                 onClick = { showMenu = false; onStar() },
@@ -1004,8 +1012,10 @@ private fun EncryptionBadge(decryptedResult: PgpDecryptionResult?) {
 private fun SenderInfoSection(email: Email, messageCount: Int, use24HourTime: Boolean) {
     val isMsgUnread = !email.isRead
     var showCcBcc by remember { mutableStateOf(false) }
+    var showDetails by remember { mutableStateOf(false) }
+    if (showDetails) MessageDetailsSheet(email, use24HourTime) { showDetails = false }
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)) {
-        SenderDetails(email, isMsgUnread, use24HourTime)
+        SenderDetails(email, isMsgUnread, use24HourTime, onShowDetails = { showDetails = true })
         Spacer(modifier = Modifier.height(8.dp))
         ToRow(email) { showCcBcc = !showCcBcc }
         if (showCcBcc && (email.cc.isNotBlank() || email.bcc.isNotBlank())) {
@@ -1022,7 +1032,7 @@ private fun SenderInfoSection(email: Email, messageCount: Int, use24HourTime: Bo
 }
 
 @Composable
-private fun SenderDetails(email: Email, isMsgUnread: Boolean, use24HourTime: Boolean) {
+private fun SenderDetails(email: Email, isMsgUnread: Boolean, use24HourTime: Boolean, onShowDetails: () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         AvatarCircle(
             photoUrl = avatarUrlsForEmail(email.fromEmail).domainLogo,
@@ -1064,6 +1074,14 @@ private fun SenderDetails(email: Email, isMsgUnread: Boolean, use24HourTime: Boo
                     Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary))
                 }
             }
+        }
+        IconButton(onClick = onShowDetails, modifier = Modifier.size(40.dp)) {
+            Icon(
+                imageVector = Icons.Rounded.Info,
+                contentDescription = "Message details",
+                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
+                modifier = Modifier.size(20.dp)
+            )
         }
     }
 }
